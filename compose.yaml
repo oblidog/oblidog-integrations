@@ -1,6 +1,6 @@
 services:
   ekartoteka:
-    image: ghcr.io/oblidog/oblidog-integrations:${OBLIDOG_INTEGRATIONS_VERSION:-v0.1.0}
+    image: ghcr.io/oblidog/oblidog-integrations:${OBLIDOG_INTEGRATIONS_VERSION:?Set an immutable release tag in .env}
     entrypoint: ["/usr/local/bin/oblidog-scheduled-run"]
     command: ["ekartoteka"]
     env_file:
@@ -9,19 +9,27 @@ services:
     volumes:
       - ekartoteka-state:/home/app/.local/state/oblidog-integrations
 
-  ekartoteka-scheduler:
-    image: ghcr.io/oblidog/oblidog-integrations:${OBLIDOG_INTEGRATIONS_VERSION:-v0.1.0}
-    entrypoint: ["/usr/local/bin/oblidog-scheduler"]
-    command: ["ekartoteka"]
+  nju-account-one:
+    image: ghcr.io/oblidog/oblidog-integrations:${OBLIDOG_INTEGRATIONS_VERSION:?Set an immutable release tag in .env}
+    entrypoint: ["/usr/local/bin/oblidog-scheduled-run"]
+    command: ["nju"]
     env_file:
-      - .env.ekartoteka
-    environment:
-      OBLIDOG_SCHEDULER_CRON: ${EKARTOTEKA_CRON:-0 9 * * *}
-      EKARTOTEKA_CRON: ${EKARTOTEKA_CRON:-0 9 * * *}
-      OBLIDOG_SCHEDULER_TIMEZONE: ${OBLIDOG_SCHEDULER_TIMEZONE:-Europe/Warsaw}
-    restart: unless-stopped
+      - .env.nju.account-one
+    restart: "no"
     volumes:
-      - ekartoteka-state:/home/app/.local/state/oblidog-integrations
+      - nju-account-one-state:/home/app/.local/state/oblidog-integrations
+
+  nju-account-two:
+    image: ghcr.io/oblidog/oblidog-integrations:${OBLIDOG_INTEGRATIONS_VERSION:?Set an immutable release tag in .env}
+    entrypoint: ["/usr/local/bin/oblidog-scheduled-run"]
+    command: ["nju"]
+    env_file:
+      - .env.nju.account-two
+    restart: "no"
+    volumes:
+      - nju-account-two-state:/home/app/.local/state/oblidog-integrations
 
 volumes:
   ekartoteka-state:
+  nju-account-one-state:
+  nju-account-two-state:

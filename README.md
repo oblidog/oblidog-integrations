@@ -89,109 +89,126 @@ tag. Do not deploy until the selected tag appears in [GitHub
 Releases](https://github.com/oblidog/oblidog-integrations/releases) and the
 release's image-publication workflow has completed.
 
-### Deploy e-Kartoteka on a host
+## Host deployment
 
-The deployment host needs Docker Engine with the Compose plugin and access to
-GHCR. If the package is private, authenticate before pulling with a GitHub
-token that has package-read access:
+The recommended small-host deployment uses Docker Compose only for one-shot
+containers and the host's cron daemon for scheduling. No integration container
+needs to stay running between jobs.
+
+The production Compose file defines three independent services:
+
+- `ekartoteka`
+- `nju-account-one`
+- `nju-account-two`
+
+Each NJU account gets its own credentials, Oblidog category, and state volume.
+All services use the same immutable application image.
+
+### Install deployment files
+
+The host needs Docker Engine with the Compose plugin and `curl`. Choose an
+existing release tag and download `install.sh` from that same tag:
+
+```bash
+export OBLIDOG_INTEGRATIONS_VERSION=vX.Y.Z
+curl -fsSLO \
+  "https://raw.githubusercontent.com/oblidog/oblidog-integrations/${OBLIDOG_INTEGRATIONS_VERSION}/install.sh"
+sh install.sh "$OBLIDOG_INTEGRATIONS_VERSION" "$HOME/oblidog-integrations"
+```
+
+The installer downloads the matching `compose.yaml` and environment examples,
+then creates the local files below if they do not already exist:
+
+```text
+~/oblidog-integrations/
+├── compose.yaml
+├── .env
+├── .env.deploy.example
+├── .env.ekartoteka
+├── .env.ekartoteka.example
+├── .env.nju.account-one
+├── .env.nju.account-two
+└── .env.nju.example
+```
+
+Existing `.env` and credential files are never overwritten, so the installer
+can also be used to refresh deployment templates for a newer release.
+
+Edit `.env.ekartoteka`, `.env.nju.account-one`, and `.env.nju.account-two` with
+the real credentials and Oblidog category codes. Use a distinct
+`NJU_ACCOUNT_NAME` and `OBLIDOG_CATEGORY_CODE` for each NJU account.
+
+If GHCR requires authentication, log in before pulling:
 
 ```bash
 docker login ghcr.io
 ```
 
-Choose an existing release tag and clone the matching Compose configuration.
-Using the same tag for both prevents a newer configuration from running against
-an older image.
+Validate, pull, and manually test every job:
 
 ```bash
-export OBLIDOG_INTEGRATIONS_VERSION=vX.Y.Z # replace with an existing release tag
-git clone --branch "$OBLIDOG_INTEGRATIONS_VERSION" --depth 1 \
-  https://github.com/oblidog/oblidog-integrations.git
-cd oblidog-integrations
-cp .env.deploy.example .env
-cp .env.ekartoteka.example .env.ekartoteka
-chmod 600 .env.ekartoteka
-```
-
-Edit `.env` and replace its version with the selected release tag. Edit
-`.env.ekartoteka` with `EKARTOTEKA_USERNAME`, `EKARTOTEKA_PASSWORD`,
-`OBLIDOG_URL`, `OBLIDOG_API_KEY`, and `OBLIDOG_CATEGORY_CODE`. Keep both files
-on the host: they are ignored by Git and excluded from image builds.
-
-Validate the resolved configuration, pull the immutable image, and make one
-manual run before enabling the scheduler:
-
-```bash
+cd "$HOME/oblidog-integrations"
 docker compose config --quiet
 docker compose pull
 docker compose run --rm ekartoteka
+docker compose run --rm nju-account-one
+docker compose run --rm nju-account-two
 ```
 
-If that run succeeds, enable the persistent scheduler and verify it:
+### Schedule with cron
+
+Install the jobs in the crontab of the user that is allowed to run Docker:
 
 ```bash
-docker compose up -d --no-deps ekartoteka-scheduler
-docker compose ps
-docker compose logs -f ekartoteka-scheduler
+mkdir -p "$HOME/.local/state/oblidog-integrations"
+crontab -e
 ```
 
-Future integrations are additional Compose services using the same image with
-their own command and `env_file`.
+A suitable schedule for a small Raspberry Pi host is:
+
+```cron
+0 9 * * * cd "$HOME/oblidog-integrations" && /usr/bin/docker compose run --rm ekartoteka >> "$HOME/.local/state/oblidog-integrations/ekartoteka.log" 2>&1
+10 9 * * * cd "$HOME/oblidog-integrations" && /usr/bin/docker compose run --rm nju-account-one >> "$HOME/.local/state/oblidog-integrations/nju-account-one.log" 2>&1
+20 9 * * * cd "$HOME/oblidog-integrations" && /usr/bin/docker compose run --rm nju-account-two >> "$HOME/.local/state/oblidog-integrations/nju-account-two.log" 2>&1
+```
+
+The stagger keeps the integrations from competing for CPU and memory and leaves
+time before Ledger's 09:30 daily system run. Adjust the paths and times to the
+host as needed.
+
+Each invocation creates a temporary container, runs the integration, writes its
+result to stdout/stderr, and removes the container when it exits. The named
+state volumes are retained. The `oblidog-scheduled-run` wrapper provides a
+non-blocking `flock`, so a second invocation of the same service is skipped if
+the previous run is still active.
+
+Cron does not replay jobs missed while the host was powered off. For hosts that
+need catch-up behavior after downtime, use a systemd timer instead.
 
 ### Upgrade and rollback
 
-To upgrade, edit `OBLIDOG_INTEGRATIONS_VERSION` in `.env` to another existing
-release tag, then pull and recreate only the scheduler. Run the same steps with
-an earlier tag to roll back.
+To deploy another release, download that release's installer and run it against
+the existing target directory:
 
 ```bash
+export OBLIDOG_INTEGRATIONS_VERSION=vX.Y.Z
+curl -fsSLO \
+  "https://raw.githubusercontent.com/oblidog/oblidog-integrations/${OBLIDOG_INTEGRATIONS_VERSION}/install.sh"
+sh install.sh "$OBLIDOG_INTEGRATIONS_VERSION" "$HOME/oblidog-integrations"
+```
+
+The installer preserves credentials and an existing `.env`. Update
+`OBLIDOG_INTEGRATIONS_VERSION` in `~/oblidog-integrations/.env` to the new
+immutable release tag, then pull it:
+
+```bash
+cd "$HOME/oblidog-integrations"
 docker compose config --quiet
-docker compose pull ekartoteka-scheduler
-docker compose up -d --no-deps --force-recreate ekartoteka-scheduler
-docker compose ps
+docker compose pull
 ```
 
-The scheduler is the only long-lived service. It does not deploy itself or the
-Ledger; updating it is an explicit host operation.
-
-### e-Kartoteka scheduler
-
-The optional `ekartoteka-scheduler` service runs the same image as a persistent,
-non-root scheduler. It invokes the CLI directly; it neither mounts the Docker
-socket nor starts sibling containers. The default schedule is `0 9 * * *` in
-`Europe/Warsaw`, leaving time before Ledger's 09:30 daily `system-run`.
-
-Set the schedule and timezone in the deployment `.env` file (not in the
-credential file). Start from `.env.deploy.example`:
-
-```dotenv
-# Use an existing immutable GitHub Release tag.
-OBLIDOG_INTEGRATIONS_VERSION=vX.Y.Z
-EKARTOTEKA_CRON=0 9 * * *
-OBLIDOG_SCHEDULER_TIMEZONE=Europe/Warsaw
-```
-
-Enable it after the manual deployment check:
-
-```bash
-docker compose pull ekartoteka-scheduler
-docker compose up -d ekartoteka-scheduler
-docker compose logs -f ekartoteka-scheduler
-```
-
-Disable it with `docker compose stop ekartoteka-scheduler`. Manual runs remain
-available through `docker compose run --rm ekartoteka`. Both services mount the
-same named state volume and use the same per-integration `flock` lock, so manual
-and scheduled runs cannot overlap. The wrapper writes start, finish, duration,
-outcome, and exit code to Compose logs. A failed run is logged and does not stop
-later scheduled runs.
-
-To check whether a run currently holds the lock:
-
-```bash
-docker compose exec ekartoteka-scheduler sh -c \
-  'flock -n /home/app/.local/state/oblidog-integrations/ekartoteka.lock -c "echo idle" || echo running'
-```
+There are no persistent application containers to recreate. The next cron run
+uses the new image. Rollback is the same operation with an earlier release tag.
 
 ### NJU Mobile accounts
 
@@ -204,41 +221,10 @@ state. If an amount, due date, or paid state changes after `ready`/`paid`, the
 integration deliberately reopens the obligation, updates it, then applies the
 required `ready` and optional `paid` transitions.
 
-Run every account in a separate container with a separate credential file and
-Oblidog category. [`compose.nju.accounts.example.yaml`](compose.nju.accounts.example.yaml)
-contains two isolated account pairs (manual + scheduler). Copy it and create a
-credential file for each account:
-
-```bash
-cp compose.nju.accounts.example.yaml compose.nju.accounts.yaml
-cp .env.nju.example .env.nju.account-one
-cp .env.nju.example .env.nju.account-two
-chmod 600 .env.nju.account-one .env.nju.account-two
-```
-
-Set a distinct `NJU_ACCOUNT_NAME` and `OBLIDOG_CATEGORY_CODE` in each file.
-Add the schedules to the deployment `.env` file; staggering them is optional
-because each account has its own lock volume:
-
-```dotenv
-NJU_ACCOUNT_ONE_CRON=0 9 * * *
-NJU_ACCOUNT_TWO_CRON=5 9 * * *
-```
-
-Validate, pull, and manually test each account before enabling its scheduler:
-
-```bash
-docker compose -f compose.nju.accounts.yaml config --quiet
-docker compose -f compose.nju.accounts.yaml pull
-docker compose -f compose.nju.accounts.yaml run --rm nju-account-one
-docker compose -f compose.nju.accounts.yaml run --rm nju-account-two
-docker compose -f compose.nju.accounts.yaml up -d \
-  nju-account-one-scheduler nju-account-two-scheduler
-```
-
-The two schedulers use the same image and `nju` command, but separate `env_file`
-and lock volumes. A manual run of an account shares that account's lock; it does
-not block the other account.
+Run every account in a separate one-shot Compose service with a separate
+credential file and Oblidog category. The default deployment contains two NJU
+account services. Create additional services and state volumes if more accounts
+are needed.
 
 ## Releases
 
