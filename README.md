@@ -113,14 +113,14 @@ existing release tag and download `install.sh` from that same tag:
 export OBLIDOG_INTEGRATIONS_VERSION=vX.Y.Z
 curl -fsSLO \
   "https://raw.githubusercontent.com/oblidog/oblidog-integrations/${OBLIDOG_INTEGRATIONS_VERSION}/install.sh"
-sh install.sh "$OBLIDOG_INTEGRATIONS_VERSION" /opt/oblidog-integrations
+sh install.sh "$OBLIDOG_INTEGRATIONS_VERSION" "$HOME/oblidog-integrations"
 ```
 
 The installer downloads the matching `compose.yaml` and environment examples,
 then creates the local files below if they do not already exist:
 
 ```text
-/opt/oblidog-integrations/
+~/oblidog-integrations/
 ├── compose.yaml
 ├── .env
 ├── .env.deploy.example
@@ -147,7 +147,7 @@ docker login ghcr.io
 Validate, pull, and manually test every job:
 
 ```bash
-cd /opt/oblidog-integrations
+cd "$HOME/oblidog-integrations"
 docker compose config --quiet
 docker compose pull
 docker compose run --rm ekartoteka
@@ -160,21 +160,21 @@ docker compose run --rm nju-account-two
 Install the jobs in the crontab of the user that is allowed to run Docker:
 
 ```bash
+mkdir -p "$HOME/.local/state/oblidog-integrations"
 crontab -e
 ```
 
 A suitable schedule for a small Raspberry Pi host is:
 
 ```cron
-0 9 * * * cd /opt/oblidog-integrations && /usr/bin/docker compose run --rm ekartoteka >> /var/log/oblidog-ekartoteka.log 2>&1
-10 9 * * * cd /opt/oblidog-integrations && /usr/bin/docker compose run --rm nju-account-one >> /var/log/oblidog-nju-account-one.log 2>&1
-20 9 * * * cd /opt/oblidog-integrations && /usr/bin/docker compose run --rm nju-account-two >> /var/log/oblidog-nju-account-two.log 2>&1
+0 9 * * * cd "$HOME/oblidog-integrations" && /usr/bin/docker compose run --rm ekartoteka >> "$HOME/.local/state/oblidog-integrations/ekartoteka.log" 2>&1
+10 9 * * * cd "$HOME/oblidog-integrations" && /usr/bin/docker compose run --rm nju-account-one >> "$HOME/.local/state/oblidog-integrations/nju-account-one.log" 2>&1
+20 9 * * * cd "$HOME/oblidog-integrations" && /usr/bin/docker compose run --rm nju-account-two >> "$HOME/.local/state/oblidog-integrations/nju-account-two.log" 2>&1
 ```
 
 The stagger keeps the integrations from competing for CPU and memory and leaves
 time before Ledger's 09:30 daily system run. Adjust the paths and times to the
-host as needed. Ensure the cron user can write to the selected log directory;
-a directory under that user's home is also fine.
+host as needed.
 
 Each invocation creates a temporary container, runs the integration, writes its
 result to stdout/stderr, and removes the container when it exits. The named
@@ -194,15 +194,15 @@ the existing target directory:
 export OBLIDOG_INTEGRATIONS_VERSION=vX.Y.Z
 curl -fsSLO \
   "https://raw.githubusercontent.com/oblidog/oblidog-integrations/${OBLIDOG_INTEGRATIONS_VERSION}/install.sh"
-sh install.sh "$OBLIDOG_INTEGRATIONS_VERSION" /opt/oblidog-integrations
+sh install.sh "$OBLIDOG_INTEGRATIONS_VERSION" "$HOME/oblidog-integrations"
 ```
 
 The installer preserves credentials and an existing `.env`. Update
-`OBLIDOG_INTEGRATIONS_VERSION` in `/opt/oblidog-integrations/.env` to the new
+`OBLIDOG_INTEGRATIONS_VERSION` in `~/oblidog-integrations/.env` to the new
 immutable release tag, then pull it:
 
 ```bash
-cd /opt/oblidog-integrations
+cd "$HOME/oblidog-integrations"
 docker compose config --quiet
 docker compose pull
 ```
