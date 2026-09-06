@@ -1,6 +1,6 @@
 [project]
 name = "oblidog-integrations"
-version = "0.1.0"
+version = "0.1.1"
 description = "Batch and one-shot integrations for Oblidog"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -27,7 +27,7 @@ tag_format = "v$version"
 update_changelog_on_bump = true
 pre_bump_hooks = ["uv lock"]
 version_provider = "commitizen"
-version = "0.1.0"
+version = "0.1.1"
 version_files = ["pyproject.toml:^version = \"(?P<version>.*)\""]
 annotated_tag = true
 
