@@ -5,6 +5,7 @@ from typing import Self
 
 import pytest
 from oblidog_client import OblidogApiError, ObligationLifecycle
+from oblidog_client.generated.errors import UnexpectedStatus
 
 from oblidog_integrations.integrations.ekartoteka import sync
 from oblidog_integrations.integrations.ekartoteka.api import EkartotekaApi
@@ -750,6 +751,27 @@ def test_snapshot_identical_to_latest_category_data_is_not_exported() -> None:
     assert result.snapshot == snapshot
     assert not result.created
     assert not created
+
+
+def test_snapshot_is_exported_when_sdk_reports_missing_data_as_404() -> None:
+    created: list[dict[str, object]] = []
+    category_data = SimpleNamespace(
+        latest=lambda _: (_ for _ in ()).throw(
+            UnexpectedStatus(404, b'{"detail":"Category data record not found"}')
+        ),
+        create=lambda _, **kwargs: created.append(kwargs),
+    )
+    oblidog = SimpleNamespace(category_data=category_data)
+
+    result = export_snapshot(
+        ekartoteka=Ekartoteka(api=FakeSnapshotApi()),  # type: ignore[arg-type]
+        oblidog=oblidog,
+        category_code="FLAT",
+        year=2026,
+    )
+
+    assert result.created
+    assert created[0]["source"] == "ekartoteka"
 
 
 def test_snapshot_export_propagates_non_missing_oblidog_api_errors() -> None:
