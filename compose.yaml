@@ -9,6 +9,16 @@ services:
     volumes:
       - ekartoteka-state:/home/app/.local/state/oblidog-integrations
 
+  iprzedszkole:
+    image: ghcr.io/oblidog/oblidog-integrations:${OBLIDOG_INTEGRATIONS_VERSION:?Set an immutable release tag in .env}
+    entrypoint: ["/usr/local/bin/oblidog-scheduled-run"]
+    command: ["iprzedszkole"]
+    env_file:
+      - .env.iprzedszkole
+    restart: "no"
+    volumes:
+      - iprzedszkole-state:/home/app/.local/state/oblidog-integrations
+
   nju-account-one:
     image: ghcr.io/oblidog/oblidog-integrations:${OBLIDOG_INTEGRATIONS_VERSION:?Set an immutable release tag in .env}
     entrypoint: ["/usr/local/bin/oblidog-scheduled-run"]
@@ -31,5 +41,6 @@ services:
 
 volumes:
   ekartoteka-state:
+  iprzedszkole-state:
   nju-account-one-state:
   nju-account-two-state:

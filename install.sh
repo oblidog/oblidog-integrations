@@ -60,6 +60,7 @@ copy_if_missing() {
 fetch compose.yaml compose.yaml
 fetch .env.deploy.example .env.deploy.example
 fetch .env.ekartoteka.example .env.ekartoteka.example
+fetch .env.iprzedszkole.example .env.iprzedszkole.example
 fetch .env.nju.example .env.nju.example
 
 if [ ! -e "${target_dir}/.env" ]; then
@@ -70,11 +71,13 @@ else
 fi
 
 copy_if_missing .env.ekartoteka.example .env.ekartoteka
+copy_if_missing .env.iprzedszkole.example .env.iprzedszkole
 copy_if_missing .env.nju.example .env.nju.account-one
 copy_if_missing .env.nju.example .env.nju.account-two
 chmod 600 \
     "${target_dir}/.env" \
     "${target_dir}/.env.ekartoteka" \
+    "${target_dir}/.env.iprzedszkole" \
     "${target_dir}/.env.nju.account-one" \
     "${target_dir}/.env.nju.account-two"
 
@@ -83,7 +86,7 @@ cat <<EOF
 Deployment files installed in ${target_dir}
 
 Next steps:
-  1. Edit .env.ekartoteka, .env.nju.account-one and .env.nju.account-two.
+  1. Edit .env.ekartoteka, .env.iprzedszkole, .env.nju.account-one and .env.nju.account-two.
   2. Run: cd ${target_dir} && docker compose config --quiet
   3. Run: cd ${target_dir} && docker compose pull
   4. Test each integration with docker compose run --rm <service>.
