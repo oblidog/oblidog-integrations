@@ -34,6 +34,8 @@ make sync
 make check
 make run-ekartoteka
 make print-ekartoteka-schema
+make run-iprzedszkole
+make print-iprzedszkole-schema
 ```
 
 `make print-ekartoteka-schema` prints the JSON Schema for the flat e-Kartoteka
@@ -49,6 +51,18 @@ Set `EKARTOTEKA_USERNAME`, `EKARTOTEKA_PASSWORD`, `OBLIDOG_URL`,
 `OBLIDOG_API_KEY`, and `OBLIDOG_CATEGORY_CODE` in that file. Running
 `make run-ekartoteka` prints and creates a category-data observation containing
 the e-Kartoteka settlement snapshot.
+
+Before running iPrzedszkole, prepare its local configuration:
+
+```bash
+cp .env.iprzedszkole.example .env.iprzedszkole
+```
+
+Set `IPRZEDSZKOLE_KINDERGARTEN`, `IPRZEDSZKOLE_LOGIN`,
+`IPRZEDSZKOLE_PASSWORD`, `OBLIDOG_URL`, `OBLIDOG_API_KEY`, and
+`OBLIDOG_CATEGORY_CODE` (dokładnie cztery litery). Każde uruchomienie
+eksportuje snapshot należności i aktualizuje komponenty opłaty stałej,
+wyżywienia i opłat dodatkowych dla obligation bieżącego miesiąca.
 
 Logs use a readable console format by default. Set `OBLIDOG_LOG_FORMAT=json`
 to emit one JSON object per log event for systemd or a log collector.
@@ -95,9 +109,10 @@ The recommended small-host deployment uses Docker Compose only for one-shot
 containers and the host's cron daemon for scheduling. No integration container
 needs to stay running between jobs.
 
-The production Compose file defines three independent services:
+The production Compose file defines four independent services:
 
 - `ekartoteka`
+- `iprzedszkole`
 - `nju-account-one`
 - `nju-account-two`
 
@@ -126,6 +141,8 @@ then creates the local files below if they do not already exist:
 ├── .env.deploy.example
 ├── .env.ekartoteka
 ├── .env.ekartoteka.example
+├── .env.iprzedszkole
+├── .env.iprzedszkole.example
 ├── .env.nju.account-one
 ├── .env.nju.account-two
 └── .env.nju.example
@@ -134,7 +151,7 @@ then creates the local files below if they do not already exist:
 Existing `.env` and credential files are never overwritten, so the installer
 can also be used to refresh deployment templates for a newer release.
 
-Edit `.env.ekartoteka`, `.env.nju.account-one`, and `.env.nju.account-two` with
+Edit `.env.ekartoteka`, `.env.iprzedszkole`, `.env.nju.account-one`, and `.env.nju.account-two` with
 the real credentials and Oblidog category codes. Use a distinct
 `NJU_ACCOUNT_NAME` and `OBLIDOG_CATEGORY_CODE` for each NJU account.
 
@@ -151,6 +168,7 @@ cd "$HOME/oblidog-integrations"
 docker compose config --quiet
 docker compose pull
 docker compose run --rm ekartoteka
+docker compose run --rm iprzedszkole
 docker compose run --rm nju-account-one
 docker compose run --rm nju-account-two
 ```
@@ -168,6 +186,7 @@ A suitable schedule for a small Raspberry Pi host is:
 
 ```cron
 0 9 * * * cd "$HOME/oblidog-integrations" && /usr/bin/docker compose run --rm ekartoteka >> "$HOME/.local/state/oblidog-integrations/ekartoteka.log" 2>&1
+5 9 * * * cd "$HOME/oblidog-integrations" && /usr/bin/docker compose run --rm iprzedszkole >> "$HOME/.local/state/oblidog-integrations/iprzedszkole.log" 2>&1
 10 9 * * * cd "$HOME/oblidog-integrations" && /usr/bin/docker compose run --rm nju-account-one >> "$HOME/.local/state/oblidog-integrations/nju-account-one.log" 2>&1
 20 9 * * * cd "$HOME/oblidog-integrations" && /usr/bin/docker compose run --rm nju-account-two >> "$HOME/.local/state/oblidog-integrations/nju-account-two.log" 2>&1
 ```
