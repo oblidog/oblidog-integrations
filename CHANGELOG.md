@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.2.0 (2026-09-07)
+
+### Feat
+
+- **nju**: export account summary category data (#19)
+
 ## v0.1.1 (2026-09-06)
 
 ### Refactor
