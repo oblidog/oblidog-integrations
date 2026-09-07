@@ -11,7 +11,7 @@ from decimal import Decimal
 class NjuInvoice:
     """One invoice shown in the NJU Mobile customer portal."""
 
-    document_id: str
+    document_number: str
     issue_date: date
     due_date: date
     paid_amount: Decimal
@@ -28,3 +28,16 @@ class NjuInvoice:
     def is_paid(self) -> bool:
         """Whether the portal marks this invoice as paid."""
         return self.status.casefold() == "zapłacona"
+
+
+@dataclass(frozen=True)
+class NjuAccountSummary:
+    """Account balances and billing dates shown above the invoice list."""
+
+    # NJU displays either an overpayment or the amount currently due.
+    overpayment: Decimal | None
+    last_payment_amount: Decimal
+    billing_period_start: date
+    billing_period_end: date
+    liability_limit: Decimal
+    amount_due: Decimal | None = None

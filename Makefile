@@ -1,4 +1,4 @@
-.PHONY: help sync lint format test check run-demo run-ekartoteka run-nju print-ekartoteka-schema test-e2e-ekartoteka
+.PHONY: help sync lint format test check run-demo run-ekartoteka run-nju print-ekartoteka-schema print-nju-schema test-e2e-ekartoteka
 
 help:
 	@echo "Available targets:"
@@ -11,6 +11,7 @@ help:
 	@echo "  make run-ekartoteka   Run e-Kartoteka using .env.ekartoteka"
 	@echo "  make run-nju          Run NJU Mobile using .env.nju"
 	@echo "  make print-ekartoteka-schema  Print the e-Kartoteka category-data JSON Schema"
+	@echo "  make print-nju-schema         Print the NJU category-data JSON Schema"
 	@echo "  make test-e2e-ekartoteka  Run read-only e-Kartoteka E2E tests"
 
 sync:
@@ -40,6 +41,9 @@ run-nju:
 
 print-ekartoteka-schema:
 	@uv run python -m oblidog_integrations.integrations.ekartoteka.schema
+
+print-nju-schema:
+	@uv run python -m oblidog_integrations.integrations.nju.schema
 
 test-e2e-ekartoteka:
 	@test -f .env.ekartoteka || { echo "Missing .env.ekartoteka; copy .env.ekartoteka.example first."; exit 1; }

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from oblidog_client import OblidogApiError, OblidogClient
+from oblidog_client.generated.errors import UnexpectedStatus
 
 from oblidog_integrations.integrations.ekartoteka.ekartoteka import (
     Ekartoteka,
@@ -24,7 +25,7 @@ class SnapshotExportResult:
 def _latest_data(oblidog: OblidogClient, category_code: str) -> dict[str, object] | None:
     try:
         return oblidog.category_data.latest(category_code).data.to_dict()
-    except OblidogApiError as error:
+    except (OblidogApiError, UnexpectedStatus) as error:
         if error.status_code == 404:
             return None
         raise
