@@ -17,6 +17,7 @@ from oblidog_integrations.integrations.ekartoteka.obligations import (
     mark_error_when_current_fee_period_is_missing,
     populate_obligation_when_fee_period_is_available,
 )
+from oblidog_integrations.reporting import RunResult
 
 logger = structlog.get_logger(__name__)
 
@@ -41,7 +42,7 @@ def _component_periods(on: date) -> tuple[date, date]:
     return previous_month, on
 
 
-def run() -> None:
+def run() -> RunResult:
     """Synchronize e-Kartoteka snapshots, components, and obligations.
 
     Reads required credentials and target configuration from the environment.
@@ -155,3 +156,15 @@ def run() -> None:
             lifecycle=obligation_check.lifecycle.value,
             reason="fee_period_unavailable",
         )
+    known_change = (
+        snapshot_export.created
+        or any(result.updated for result in obligation_data_syncs)
+        or obligation_check.marked_as_error
+    )
+    if known_change:
+        return RunResult(changes_detected=True)
+    return RunResult(
+        changes_detected=(
+            None if any(result.upserted_count for result in components_syncs) else False
+        )
+    )

@@ -40,7 +40,9 @@ def _currency_amount(amount: Decimal | None) -> float | None:
     return float(amount.quantize(_GROSZ)) if amount is not None else None
 
 
-def _latest_data(oblidog: OblidogClient, category_code: str) -> dict[str, object] | None:
+def _latest_data(
+    oblidog: OblidogClient, category_code: str
+) -> dict[str, object] | None:
     try:
         return oblidog.category_data.latest(category_code).data.to_dict()
     except (OblidogApiError, UnexpectedStatus) as error:
