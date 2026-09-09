@@ -22,7 +22,9 @@ class SnapshotExportResult:
     created: bool
 
 
-def _latest_data(oblidog: OblidogClient, category_code: str) -> dict[str, object] | None:
+def _latest_data(
+    oblidog: OblidogClient, category_code: str
+) -> dict[str, object] | None:
     try:
         return oblidog.category_data.latest(category_code).data.to_dict()
     except (OblidogApiError, UnexpectedStatus) as error:

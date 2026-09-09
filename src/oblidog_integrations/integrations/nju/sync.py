@@ -20,6 +20,7 @@ from oblidog_integrations.integrations.nju.category_data import (
 )
 from oblidog_integrations.integrations.nju.components import sync_invoice_components
 from oblidog_integrations.integrations.nju.models import NjuAccountSummary, NjuInvoice
+from oblidog_integrations.reporting import RunResult
 
 logger = structlog.get_logger(__name__)
 
@@ -102,7 +103,9 @@ def _log_account_summary(*, account: str, summary: NjuAccountSummary) -> None:
         overpayment=(
             str(summary.overpayment) if summary.overpayment is not None else None
         ),
-        amount_due=(str(summary.amount_due) if summary.amount_due is not None else None),
+        amount_due=(
+            str(summary.amount_due) if summary.amount_due is not None else None
+        ),
         last_payment_amount=str(summary.last_payment_amount),
         billing_period_start=summary.billing_period_start.isoformat(),
         billing_period_end=summary.billing_period_end.isoformat(),
@@ -174,7 +177,7 @@ def _reconcile_obligation(
     return True
 
 
-def run() -> None:
+def run() -> RunResult:
     """Synchronize the current NJU invoice period for one configured account."""
     now = datetime.now(ZoneInfo("Europe/Warsaw"))
     account_name = os.getenv("NJU_ACCOUNT_NAME", "nju")
@@ -200,6 +203,8 @@ def run() -> None:
     previous_period = _previous_period(now)
     previous_invoices = _invoices_for_period(all_invoices, period=previous_period)
     category_code = _required_env("OBLIDOG_CATEGORY_CODE")
+    summary_changed = False
+    previous_components_upserted = 0
     with OblidogClient(
         base_url=_required_env("OBLIDOG_URL"),
         api_key=_required_env("OBLIDOG_API_KEY"),
@@ -218,13 +223,14 @@ def run() -> None:
                 category_code=category_code,
                 reason=None if summary_export.created else "identical_latest_data",
             )
+            summary_changed = summary_export.created
         if not invoices and not previous_invoices:
             logger.info(
                 "nju_invoices_absent",
                 account=account_name,
                 period=now.strftime("%m.%Y"),
             )
-            return
+            return RunResult(changes_detected=summary_changed)
         if previous_invoices:
             previous_components_sync = sync_invoice_components(
                 oblidog=oblidog,
@@ -240,13 +246,22 @@ def run() -> None:
                 obligation_key=previous_components_sync.obligation_key,
                 upserted_count=previous_components_sync.upserted_count,
             )
+            previous_components_upserted = previous_components_sync.upserted_count
         if not invoices:
             logger.info(
                 "nju_invoices_absent",
                 account=account_name,
                 period=now.strftime("%m.%Y"),
             )
-            return
+            return RunResult(
+                changes_detected=(
+                    True
+                    if summary_changed
+                    else None
+                    if previous_components_upserted
+                    else False
+                )
+            )
         obligations = oblidog.obligations.list(
             year=now.year,
             month=now.month,
@@ -292,4 +307,13 @@ def run() -> None:
         account=account_name,
         obligation_key=components_sync.obligation_key,
         upserted_count=components_sync.upserted_count,
+    )
+    if summary_changed or changed:
+        return RunResult(changes_detected=True)
+    return RunResult(
+        changes_detected=(
+            None
+            if previous_components_upserted or components_sync.upserted_count
+            else False
+        )
     )

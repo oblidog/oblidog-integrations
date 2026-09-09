@@ -15,11 +15,17 @@ src/oblidog_integrations/
         └── sync.py
 ```
 
-Each integration owns its provider-specific code and exposes a parameterless `run()` function. The central CLI only registers and dispatches integrations.
+Each integration owns its provider-specific code and exposes a parameterless
+`run()` function returning whether it detected a meaningful change. The central
+CLI dispatches integrations through the shared lifecycle reporter.
 
 ## Development
 
 Python 3.12 and `uv` are used for dependency management.
+
+Until `oblidog-client` has its first PyPI release, the dependency is pinned to
+the exact merged commit that contains integration health reporting. Replace the
+Git reference with a compatible PyPI version range after that release.
 
 ```bash
 uv sync
@@ -48,7 +54,8 @@ cp .env.ekartoteka.example .env.ekartoteka
 ```
 
 Set `EKARTOTEKA_USERNAME`, `EKARTOTEKA_PASSWORD`, `OBLIDOG_URL`,
-`OBLIDOG_API_KEY`, and `OBLIDOG_CATEGORY_CODE` in that file. Running
+`OBLIDOG_API_KEY`, `OBLIDOG_INTEGRATION_KEY`, and `OBLIDOG_CATEGORY_CODE` in
+that file. Running
 `make run-ekartoteka` prints and creates a category-data observation containing
 the e-Kartoteka settlement snapshot.
 
@@ -59,8 +66,9 @@ cp .env.iprzedszkole.example .env.iprzedszkole
 ```
 
 Set `IPRZEDSZKOLE_KINDERGARTEN`, `IPRZEDSZKOLE_LOGIN`,
-`IPRZEDSZKOLE_PASSWORD`, `OBLIDOG_URL`, `OBLIDOG_API_KEY`, and
-`OBLIDOG_CATEGORY_CODE` (dokładnie cztery litery). Każde uruchomienie
+`IPRZEDSZKOLE_PASSWORD`, `OBLIDOG_URL`, `OBLIDOG_API_KEY`,
+`OBLIDOG_INTEGRATION_KEY`, and `OBLIDOG_CATEGORY_CODE` (dokładnie cztery
+litery). Każde uruchomienie
 eksportuje snapshot należności i aktualizuje komponenty opłaty stałej,
 wyżywienia i opłat dodatkowych dla obligation bieżącego miesiąca.
 
@@ -72,6 +80,7 @@ Run the proof-of-concept integration with:
 ```bash
 OBLIDOG_URL=https://oblidog.example.com \
 OBLIDOG_API_KEY=... \
+OBLIDOG_INTEGRATION_KEY=demo-local \
 OBLIDOG_CATEGORY_CODE=DEMO \
 uv run oblidog-integrations demo
 ```
@@ -151,9 +160,35 @@ then creates the local files below if they do not already exist:
 Existing `.env` and credential files are never overwritten, so the installer
 can also be used to refresh deployment templates for a newer release.
 
-Edit `.env.ekartoteka`, `.env.iprzedszkole`, `.env.nju.account-one`, and `.env.nju.account-two` with
-the real credentials and Oblidog category codes. Use a distinct
-`NJU_ACCOUNT_NAME` and `OBLIDOG_CATEGORY_CODE` for each NJU account.
+Edit `.env.ekartoteka`, `.env.iprzedszkole`, `.env.nju.account-one`, and
+`.env.nju.account-two` with the real credentials, Oblidog category codes, and
+integration instance keys. Create each instance in Ledger before enabling its
+runner. The instance provider must match the CLI command (`ekartoteka`,
+`iprzedszkole`, or `nju`). Use a distinct `NJU_ACCOUNT_NAME`,
+`OBLIDOG_CATEGORY_CODE`, and `OBLIDOG_INTEGRATION_KEY` for each NJU account.
+Both NJU jobs may use the same ledger-scoped `OBLIDOG_API_KEY`.
+
+### Lifecycle reporting
+
+When `OBLIDOG_INTEGRATION_KEY` is set, the CLI reads that registered Ledger
+instance and reports one start before provider work. A disabled instance is a
+successful skip. A successful adapter run reports `success` with one of three
+change signals: `true`, `false`, or `null` when the adapter cannot reliably
+decide. Provider or synchronization exceptions report a sanitized failure and
+still make the container exit nonzero.
+
+Transient network and server failures are retried twice with the same run ID.
+Authentication, authorization, unknown-instance, provider-mismatch, disabled
+start, and revision/run conflicts stop the invocation without running the
+provider. Every later scheduled invocation performs a new read and creates a new
+run ID. A failure to report successful completion also exits nonzero and is not
+followed by a contradictory failure report.
+
+Omit `OBLIDOG_INTEGRATION_KEY` during staged rollout to retain the previous
+unmonitored behavior. Add it only after the corresponding instance exists in a
+Ledger release that contains the integration registry. Detailed local
+tracebacks are retained, while configured API keys, passwords, tokens, and
+secrets are redacted from structured logs.
 
 If GHCR requires authentication, log in before pulling:
 
@@ -242,8 +277,9 @@ required `ready` and optional `paid` transitions.
 
 Run every account in a separate one-shot Compose service with a separate
 credential file and Oblidog category. The default deployment contains two NJU
-account services. Create additional services and state volumes if more accounts
-are needed.
+account services. Give every account a distinct integration instance key; they
+can share the same ledger API key and still report independent run IDs and
+health. Create additional services and state volumes if more accounts are needed.
 
 ## Releases
 

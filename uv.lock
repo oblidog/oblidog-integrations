@@ -381,7 +381,7 @@ wheels = [
 [[package]]
 name = "oblidog-client"
 version = "0.1.0"
-source = { git = "https://github.com/oblidog/oblidog-client-python.git#c6be87efeb096aa3de938f55b05f4045fd3ef98f" }
+source = { git = "https://github.com/oblidog/oblidog-client-python.git?rev=640f487166dd9a0703a100329d651d2dffbe045f#640f487166dd9a0703a100329d651d2dffbe045f" }
 dependencies = [
     { name = "attrs" },
     { name = "httpx" },
@@ -394,6 +394,7 @@ version = "0.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },
+    { name = "httpx" },
     { name = "oblidog-client" },
     { name = "pydantic" },
     { name = "structlog" },
@@ -409,7 +410,8 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.12" },
-    { name = "oblidog-client", git = "https://github.com/oblidog/oblidog-client-python.git" },
+    { name = "httpx", specifier = ">=0.27,<0.29" },
+    { name = "oblidog-client", git = "https://github.com/oblidog/oblidog-client-python.git?rev=640f487166dd9a0703a100329d651d2dffbe045f" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "structlog", specifier = ">=25.0" },
 ]

@@ -6,6 +6,7 @@ import os
 from oblidog_client import OblidogClient
 
 from oblidog_integrations.integrations.demo.provider import fetch
+from oblidog_integrations.reporting import RunResult
 
 
 def _required_env(name: str) -> str:
@@ -15,7 +16,7 @@ def _required_env(name: str) -> str:
     return value
 
 
-def run() -> None:
+def run() -> RunResult:
     now = datetime.datetime.now(datetime.UTC)
     record = fetch()
 
@@ -44,3 +45,4 @@ def run() -> None:
             f"Imported demo invoice {record.invoice_number}",
         )
         client.obligations.mark_ready(obligation.key)
+    return RunResult(changes_detected=True)

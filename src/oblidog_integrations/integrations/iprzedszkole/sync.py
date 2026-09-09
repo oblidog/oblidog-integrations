@@ -17,6 +17,7 @@ from oblidog_integrations.integrations.iprzedszkole.category_data import (
 from oblidog_integrations.integrations.iprzedszkole.components import (
     sync_receivables_components,
 )
+from oblidog_integrations.reporting import RunResult
 
 logger = structlog.get_logger(__name__)
 
@@ -37,7 +38,7 @@ def _category_code() -> str:
     return category_code
 
 
-def run() -> None:
+def run() -> RunResult:
     """Fetch one account's receivables and publish a changed snapshot."""
     now = datetime.now(ZoneInfo("Europe/Warsaw"))
     account_name = os.getenv("IPRZEDSZKOLE_ACCOUNT_NAME", "iprzedszkole")
@@ -76,3 +77,6 @@ def run() -> None:
         obligation_key=components_sync.obligation_key,
         upserted_count=components_sync.upserted_count,
     )
+    if created:
+        return RunResult(changes_detected=True)
+    return RunResult(changes_detected=None if components_sync.upserted_count else False)

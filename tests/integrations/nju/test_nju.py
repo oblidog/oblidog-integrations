@@ -377,7 +377,8 @@ def test_run_exports_account_summary_without_invoices(monkeypatch) -> None:
     monkeypatch.setenv("OBLIDOG_API_KEY", "api-key")
     monkeypatch.setenv("OBLIDOG_CATEGORY_CODE", "NJU")
 
-    sync.run()
+    result = sync.run()
+    assert result.changes_detected is True
 
     assert captured["category_code"] == "NJU"
     assert captured["source"] == "nju"
@@ -618,7 +619,8 @@ def test_run_upserts_components_for_the_previous_invoice_period(monkeypatch) -> 
     monkeypatch.setenv("OBLIDOG_API_KEY", "api-key")
     monkeypatch.setenv("OBLIDOG_CATEGORY_CODE", "NJU")
 
-    sync.run()
+    result = sync.run()
+    assert result.changes_detected is None
 
     assert upserts[0]["obligation_key"] == (
         f"NJU-{previous_month.year}-{previous_month.month:02d}"
@@ -685,7 +687,8 @@ def test_run_updates_and_readies_an_unpaid_current_invoice(monkeypatch) -> None:
     monkeypatch.setenv("OBLIDOG_API_KEY", "api-key")
     monkeypatch.setenv("OBLIDOG_CATEGORY_CODE", "NJU")
 
-    sync.run()
+    result = sync.run()
+    assert result.changes_detected is True
 
     assert updates == [
         {
@@ -756,7 +759,8 @@ def test_run_marks_a_fully_paid_current_invoice_as_paid(monkeypatch) -> None:
     monkeypatch.setenv("OBLIDOG_API_KEY", "api-key")
     monkeypatch.setenv("OBLIDOG_CATEGORY_CODE", "NJU")
 
-    sync.run()
+    result = sync.run()
+    assert result.changes_detected is True
 
     assert marked_paid == ["NJU-2026-09"]
 

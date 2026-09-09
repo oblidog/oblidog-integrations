@@ -602,7 +602,8 @@ def test_run_exports_the_snapshot_as_category_data(monkeypatch) -> None:
     monkeypatch.setenv("OBLIDOG_API_KEY", "api-key")
     monkeypatch.setenv("OBLIDOG_CATEGORY_CODE", "FLAT")
 
-    sync.run()
+    result = sync.run()
+    assert result.changes_detected is True
 
     assert captured["category_code"] == "FLAT"
     assert captured["source"] == "ekartoteka"
