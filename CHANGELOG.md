@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.4.0 (2026-09-09)
+
+### Feat
+
+- report integration health around runner execution (#24)
+
 ## v0.3.0 (2026-09-07)
 
 ### Feat
