@@ -1,5 +1,9 @@
 # oblidog-integrations
 
+[![Dependabot Updates](https://github.com/oblidog/oblidog-integrations/actions/workflows/dependabot/dependabot-updates/badge.svg)](https://github.com/oblidog/oblidog-integrations/actions/workflows/dependabot/dependabot-updates)
+[![CI](https://github.com/oblidog/oblidog-integrations/actions/workflows/ci.yml/badge.svg)](https://github.com/oblidog/oblidog-integrations/actions/workflows/ci.yml)
+[![Publish container image](https://github.com/oblidog/oblidog-integrations/actions/workflows/publish-images.yml/badge.svg)](https://github.com/oblidog/oblidog-integrations/actions/workflows/publish-images.yml)
+
 Batch and one-shot integrations for Oblidog.
 
 The repository is a monorepo for integrations that run periodically, fetch data from an external provider, synchronize it through `oblidog-client`, and exit. Long-running services such as mail ingestion should live separately.
