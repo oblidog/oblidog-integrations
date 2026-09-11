@@ -12,7 +12,6 @@ EKARTOTEKA_USERNAME=...
 EKARTOTEKA_PASSWORD=...
 OBLIDOG_URL=https://...
 OBLIDOG_API_KEY=...
-OBLIDOG_CATEGORY_CODE=...
 ```
 
 Opcjonalnie `OBLIDOG_LOG_FORMAT=json` zmienia logi na JSON.
@@ -33,7 +32,7 @@ Jeden run wykonuje kolejno:
 Klucz obligation ma format:
 
 ```text
-<OBLIDOG_CATEGORY_CODE>-YYYY-MM
+<kod kategorii z kontekstu integracji>-YYYY-MM
 ```
 
 ## Mapowanie okresów

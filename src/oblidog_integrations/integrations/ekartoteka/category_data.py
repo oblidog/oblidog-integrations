@@ -22,11 +22,9 @@ class SnapshotExportResult:
     created: bool
 
 
-def _latest_data(
-    oblidog: OblidogClient, category_code: str
-) -> dict[str, object] | None:
+def _latest_data(oblidog: OblidogClient) -> dict[str, object] | None:
     try:
-        return oblidog.category_data.latest(category_code).data.to_dict()
+        return oblidog.category_data.latest().data.to_dict()
     except (OblidogApiError, UnexpectedStatus) as error:
         if error.status_code == 404:
             return None
@@ -37,7 +35,6 @@ def export_snapshot(
     *,
     ekartoteka: Ekartoteka,
     oblidog: OblidogClient,
-    category_code: str,
     year: int,
 ) -> SnapshotExportResult:
     """Create a category-data observation when the snapshot has changed.
@@ -45,7 +42,6 @@ def export_snapshot(
     Args:
         ekartoteka: Authenticated provider facade used to fetch the snapshot.
         oblidog: Authenticated Oblidog client used to read and create data.
-        category_code: Oblidog category that owns the observation.
         year: Settlement year included in the snapshot.
 
     Returns:
@@ -57,13 +53,11 @@ def export_snapshot(
     """
     snapshot = ekartoteka.get_settlement_snapshot(year)
     data = snapshot.model_dump(mode="json")
-    if _latest_data(oblidog, category_code) == data:
+    if _latest_data(oblidog) == data:
         return SnapshotExportResult(snapshot=snapshot, created=False)
 
     oblidog.category_data.create(
-        category_code,
         observed_at=datetime.now(UTC),
         data=data,
-        source="ekartoteka",
     )
     return SnapshotExportResult(snapshot=snapshot, created=True)

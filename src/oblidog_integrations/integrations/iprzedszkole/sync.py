@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import re
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -28,34 +27,26 @@ def _required_env(name: str) -> str:
     raise RuntimeError(f"Missing required environment variable: {name}")
 
 
-def _category_code() -> str:
-    """Return the iPrzedszkole category code, which is four letters long."""
-    category_code = _required_env("OBLIDOG_CATEGORY_CODE")
-    if not re.fullmatch(r"[A-Za-z]{4}", category_code):
-        raise RuntimeError(
-            "OBLIDOG_CATEGORY_CODE for iPrzedszkole must contain exactly four letters"
-        )
-    return category_code
-
-
 def run() -> RunResult:
     """Fetch one account's receivables and publish a changed snapshot."""
     now = datetime.now(ZoneInfo("Europe/Warsaw"))
     account_name = os.getenv("IPRZEDSZKOLE_ACCOUNT_NAME", "iprzedszkole")
-    receivables = IprzedszkoleClient(
-        kindergarten=_required_env("IPRZEDSZKOLE_KINDERGARTEN"),
-        login=_required_env("IPRZEDSZKOLE_LOGIN"),
-        password=_required_env("IPRZEDSZKOLE_PASSWORD"),
-    ).fetch_receivables(on=now.date())
-    category_code = _category_code()
-    with OblidogClient(
-        base_url=_required_env("OBLIDOG_URL"),
-        api_key=_required_env("OBLIDOG_API_KEY"),
-    ) as oblidog:
+    with (
+        OblidogClient(
+            base_url=_required_env("OBLIDOG_URL"),
+            api_key=_required_env("OBLIDOG_API_KEY"),
+        ) as oblidog,
+        oblidog.integrations.run() as run,
+    ):
+        category_code = run.context["category"]["code"]
+        receivables = IprzedszkoleClient(
+            kindergarten=_required_env("IPRZEDSZKOLE_KINDERGARTEN"),
+            login=_required_env("IPRZEDSZKOLE_LOGIN"),
+            password=_required_env("IPRZEDSZKOLE_PASSWORD"),
+        ).fetch_receivables(on=now.date())
         created = export_receivables(
             receivables=receivables,
             oblidog=oblidog,
-            category_code=category_code,
         )
         components_sync = sync_receivables_components(
             oblidog=oblidog,
@@ -63,6 +54,14 @@ def run() -> RunResult:
             receivables=receivables,
             on=now.date(),
         )
+        result = RunResult(
+            changes_detected=True
+            if created
+            else None
+            if components_sync.upserted_count
+            else False
+        )
+        run.finish_success(changes_detected=result.changes_detected)
     logger.info(
         "iprzedszkole_receivables_exported"
         if created
@@ -77,6 +76,4 @@ def run() -> RunResult:
         obligation_key=components_sync.obligation_key,
         upserted_count=components_sync.upserted_count,
     )
-    if created:
-        return RunResult(changes_detected=True)
-    return RunResult(changes_detected=None if components_sync.upserted_count else False)
+    return result

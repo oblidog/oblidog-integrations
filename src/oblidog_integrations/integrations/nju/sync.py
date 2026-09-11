@@ -202,18 +202,20 @@ def run() -> RunResult:
     invoices = invoices_for_current_period(all_invoices, now=now)
     previous_period = _previous_period(now)
     previous_invoices = _invoices_for_period(all_invoices, period=previous_period)
-    category_code = _required_env("OBLIDOG_CATEGORY_CODE")
     summary_changed = False
     previous_components_upserted = 0
-    with OblidogClient(
-        base_url=_required_env("OBLIDOG_URL"),
-        api_key=_required_env("OBLIDOG_API_KEY"),
-    ) as oblidog:
+    with (
+        OblidogClient(
+            base_url=_required_env("OBLIDOG_URL"),
+            api_key=_required_env("OBLIDOG_API_KEY"),
+        ) as oblidog,
+        oblidog.integrations.run() as run,
+    ):
+        category_code = run.context["category"]["code"]
         if summary := getattr(nju, "account_summary", None):
             summary_export = export_account_summary(
                 summary=summary,
                 oblidog=oblidog,
-                category_code=category_code,
             )
             logger.info(
                 "nju_account_summary_exported"
@@ -230,7 +232,9 @@ def run() -> RunResult:
                 account=account_name,
                 period=now.strftime("%m.%Y"),
             )
-            return RunResult(changes_detected=summary_changed)
+            result = RunResult(changes_detected=summary_changed)
+            run.finish_success(changes_detected=result.changes_detected)
+            return result
         if previous_invoices:
             previous_components_sync = sync_invoice_components(
                 oblidog=oblidog,
@@ -253,7 +257,7 @@ def run() -> RunResult:
                 account=account_name,
                 period=now.strftime("%m.%Y"),
             )
-            return RunResult(
+            result = RunResult(
                 changes_detected=(
                     True
                     if summary_changed
@@ -262,10 +266,11 @@ def run() -> RunResult:
                     else False
                 )
             )
+            run.finish_success(changes_detected=result.changes_detected)
+            return result
         obligations = oblidog.obligations.list(
             year=now.year,
             month=now.month,
-            category_code=category_code,
         )
         if obligations.count != 1:
             raise RuntimeError(
@@ -290,6 +295,16 @@ def run() -> RunResult:
             due_date=due_date,
             paid=paid,
         )
+        result = RunResult(
+            changes_detected=(
+                True
+                if summary_changed or changed
+                else None
+                if previous_components_upserted or components_sync.upserted_count
+                else False
+            )
+        )
+        run.finish_success(changes_detected=result.changes_detected)
 
     logger.info(
         "nju_obligation_synced",
@@ -308,12 +323,4 @@ def run() -> RunResult:
         obligation_key=components_sync.obligation_key,
         upserted_count=components_sync.upserted_count,
     )
-    if summary_changed or changed:
-        return RunResult(changes_detected=True)
-    return RunResult(
-        changes_detected=(
-            None
-            if previous_components_upserted or components_sync.upserted_count
-            else False
-        )
-    )
+    return result
