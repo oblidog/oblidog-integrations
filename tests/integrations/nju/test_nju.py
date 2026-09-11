@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import nullcontext
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
@@ -24,6 +25,17 @@ from oblidog_integrations.integrations.nju.category_data import (
 from oblidog_integrations.integrations.nju.components import sync_invoice_components
 from oblidog_integrations.integrations.nju.models import NjuAccountSummary, NjuInvoice
 from oblidog_integrations.integrations.nju.schema import account_summary_schema
+
+
+def _fake_integrations() -> SimpleNamespace:
+    return SimpleNamespace(
+        run=lambda: nullcontext(
+            SimpleNamespace(
+                context={"category": {"code": "NJU"}},
+                finish_success=lambda **_: None,
+            )
+        )
+    )
 
 
 def test_parse_invoices_extracts_the_portal_invoice_fields() -> None:
@@ -289,16 +301,15 @@ def test_account_summary_identical_to_latest_category_data_is_not_exported() -> 
     )
     created: list[dict[str, object]] = []
     category_data = SimpleNamespace(
-        latest=lambda _: SimpleNamespace(
+        latest=lambda: SimpleNamespace(
             data=SimpleNamespace(to_dict=lambda: account_summary_data(summary))
         ),
-        create=lambda _, **kwargs: created.append(kwargs),
+        create=lambda **kwargs: created.append(kwargs),
     )
 
     result = export_account_summary(
         summary=summary,
         oblidog=SimpleNamespace(category_data=category_data),
-        category_code="NJU",
     )
 
     assert result.summary == summary
@@ -316,16 +327,15 @@ def test_account_summary_is_exported_when_sdk_reports_missing_data_as_404() -> N
     )
     created: list[dict[str, object]] = []
     category_data = SimpleNamespace(
-        latest=lambda _: (_ for _ in ()).throw(
+        latest=lambda: (_ for _ in ()).throw(
             UnexpectedStatus(404, b'{"detail":"Category data record not found"}')
         ),
-        create=lambda _, **kwargs: created.append(kwargs),
+        create=lambda **kwargs: created.append(kwargs),
     )
 
     result = export_account_summary(
         summary=summary,
         oblidog=SimpleNamespace(category_data=category_data),
-        category_code="NJU",
     )
 
     assert result.created
@@ -355,6 +365,7 @@ def test_run_exports_account_summary_without_invoices(monkeypatch) -> None:
     class FakeOblidogClient:
         def __init__(self, **_: object) -> None:
             self.category_data = self
+            self.integrations = _fake_integrations()
 
         def __enter__(self) -> Self:
             return self
@@ -362,11 +373,10 @@ def test_run_exports_account_summary_without_invoices(monkeypatch) -> None:
         def __exit__(self, *_: object) -> None:
             return None
 
-        def latest(self, _: str) -> object:
+        def latest(self) -> object:
             raise OblidogApiError(404)
 
-        def create(self, category_code: str, **kwargs: object) -> None:
-            captured["category_code"] = category_code
+        def create(self, **kwargs: object) -> None:
             captured.update(kwargs)
 
     monkeypatch.setattr(sync, "NjuClient", FakeNjuClient)
@@ -375,13 +385,9 @@ def test_run_exports_account_summary_without_invoices(monkeypatch) -> None:
     monkeypatch.setenv("NJU_PASSWORD", "password")
     monkeypatch.setenv("OBLIDOG_URL", "https://oblidog.example.com")
     monkeypatch.setenv("OBLIDOG_API_KEY", "api-key")
-    monkeypatch.setenv("OBLIDOG_CATEGORY_CODE", "NJU")
-
     result = sync.run()
     assert result.changes_detected is True
 
-    assert captured["category_code"] == "NJU"
-    assert captured["source"] == "nju"
     assert captured["data"] == account_summary_data(summary)
     assert isinstance(captured["observed_at"], datetime)
 
@@ -558,7 +564,6 @@ def test_invoice_components_are_upserted_with_invoice_metadata() -> None:
             "type": "invoice",
             "label": "FV/2026/09/123",
             "amount": "12.34",
-            "source": "nju",
             "external_id": "FV/2026/09/123",
             "metadata": {
                 "document_number": "FV/2026/09/123",
@@ -604,6 +609,7 @@ def test_run_upserts_components_for_the_previous_invoice_period(monkeypatch) -> 
     class FakeOblidogClient:
         def __init__(self, **_: object) -> None:
             self.obligations = obligations
+            self.integrations = _fake_integrations()
 
         def __enter__(self) -> Self:
             return self
@@ -617,8 +623,6 @@ def test_run_upserts_components_for_the_previous_invoice_period(monkeypatch) -> 
     monkeypatch.setenv("NJU_PASSWORD", "password")
     monkeypatch.setenv("OBLIDOG_URL", "https://oblidog.example.com")
     monkeypatch.setenv("OBLIDOG_API_KEY", "api-key")
-    monkeypatch.setenv("OBLIDOG_CATEGORY_CODE", "NJU")
-
     result = sync.run()
     assert result.changes_detected is None
 
@@ -672,6 +676,7 @@ def test_run_updates_and_readies_an_unpaid_current_invoice(monkeypatch) -> None:
     class FakeOblidogClient:
         def __init__(self, **_: object) -> None:
             self.obligations = obligations
+            self.integrations = _fake_integrations()
 
         def __enter__(self) -> Self:
             return self
@@ -685,8 +690,6 @@ def test_run_updates_and_readies_an_unpaid_current_invoice(monkeypatch) -> None:
     monkeypatch.setenv("NJU_PASSWORD", "password")
     monkeypatch.setenv("OBLIDOG_URL", "https://oblidog.example.com")
     monkeypatch.setenv("OBLIDOG_API_KEY", "api-key")
-    monkeypatch.setenv("OBLIDOG_CATEGORY_CODE", "NJU")
-
     result = sync.run()
     assert result.changes_detected is True
 
@@ -744,6 +747,7 @@ def test_run_marks_a_fully_paid_current_invoice_as_paid(monkeypatch) -> None:
     class FakeOblidogClient:
         def __init__(self, **_: object) -> None:
             self.obligations = obligations
+            self.integrations = _fake_integrations()
 
         def __enter__(self) -> Self:
             return self
@@ -757,8 +761,6 @@ def test_run_marks_a_fully_paid_current_invoice_as_paid(monkeypatch) -> None:
     monkeypatch.setenv("NJU_PASSWORD", "password")
     monkeypatch.setenv("OBLIDOG_URL", "https://oblidog.example.com")
     monkeypatch.setenv("OBLIDOG_API_KEY", "api-key")
-    monkeypatch.setenv("OBLIDOG_CATEGORY_CODE", "NJU")
-
     result = sync.run()
     assert result.changes_detected is True
 

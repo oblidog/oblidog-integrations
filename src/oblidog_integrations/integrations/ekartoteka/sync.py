@@ -65,15 +65,17 @@ def run() -> RunResult:
     )
     ekartoteka_client.login()
 
-    with OblidogClient(
-        base_url=_required_env("OBLIDOG_URL"),
-        api_key=_required_env("OBLIDOG_API_KEY"),
-    ) as client:
-        category_code = _required_env("OBLIDOG_CATEGORY_CODE")
+    with (
+        OblidogClient(
+            base_url=_required_env("OBLIDOG_URL"),
+            api_key=_required_env("OBLIDOG_API_KEY"),
+        ) as client,
+        client.integrations.run() as run,
+    ):
+        category_code = run.context["category"]["code"]
         snapshot_export = export_snapshot(
             ekartoteka=ekartoteka_client,
             oblidog=client,
-            category_code=category_code,
             year=now.year,
         )
         billing_periods = _component_periods(now.date())
@@ -101,6 +103,21 @@ def run() -> RunResult:
             category_code=category_code,
             on=now.date(),
         )
+        known_change = (
+            snapshot_export.created
+            or any(result.updated for result in obligation_data_syncs)
+            or obligation_check.marked_as_error
+        )
+        result = RunResult(
+            changes_detected=(
+                True
+                if known_change
+                else None
+                if any(sync.upserted_count for sync in components_syncs)
+                else False
+            )
+        )
+        run.finish_success(changes_detected=result.changes_detected)
     if snapshot_export.created:
         logger.info(
             "snapshot_exported",
@@ -156,15 +173,4 @@ def run() -> RunResult:
             lifecycle=obligation_check.lifecycle.value,
             reason="fee_period_unavailable",
         )
-    known_change = (
-        snapshot_export.created
-        or any(result.updated for result in obligation_data_syncs)
-        or obligation_check.marked_as_error
-    )
-    if known_change:
-        return RunResult(changes_detected=True)
-    return RunResult(
-        changes_detected=(
-            None if any(result.upserted_count for result in components_syncs) else False
-        )
-    )
+    return result

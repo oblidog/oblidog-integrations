@@ -30,7 +30,6 @@ def sync_invoice_components(
             type="invoice",
             label=invoice.document_number,
             amount=str(invoice.total_amount),
-            source="nju",
             external_id=invoice.document_number,
             metadata={
                 "document_number": invoice.document_number,

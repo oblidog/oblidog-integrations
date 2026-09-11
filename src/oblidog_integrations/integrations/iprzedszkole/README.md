@@ -20,11 +20,11 @@ IPRZEDSZKOLE_LOGIN=...
 IPRZEDSZKOLE_PASSWORD=...
 OBLIDOG_URL=https://...
 OBLIDOG_API_KEY=...
-OBLIDOG_CATEGORY_CODE=IPRZ
 ```
 
-`OBLIDOG_CATEGORY_CODE` musi zawierać dokładnie cztery litery. Opcjonalne
-`IPRZEDSZKOLE_ACCOUNT_NAME` służy wyłącznie do identyfikacji konta w logach.
+Kod kategorii jest odczytywany z kontekstu uwierzytelnionego klucza API.
+Opcjonalne `IPRZEDSZKOLE_ACCOUNT_NAME` służy wyłącznie do identyfikacji konta
+w logach.
 
 Uruchomienie lokalne:
 
@@ -71,7 +71,7 @@ Szczegółowa lista opłat jest zapisywana w obligation bieżącego miesiąca o
 kluczu:
 
 ```text
-<OBLIDOG_CATEGORY_CODE>-YYYY-MM
+<kod kategorii z kontekstu integracji>-YYYY-MM
 ```
 
 | Rodzaj opłaty w iPrzedszkole | Component Ledger | Etykieta | `external_id` |

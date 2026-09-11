@@ -20,14 +20,16 @@ def run() -> RunResult:
     now = datetime.datetime.now(datetime.UTC)
     record = fetch()
 
-    with OblidogClient(
-        base_url=_required_env("OBLIDOG_URL"),
-        api_key=_required_env("OBLIDOG_API_KEY"),
-    ) as client:
+    with (
+        OblidogClient(
+            base_url=_required_env("OBLIDOG_URL"),
+            api_key=_required_env("OBLIDOG_API_KEY"),
+        ) as client,
+        client.integrations.run() as run,
+    ):
         obligations = client.obligations.list(
             year=now.year,
             month=now.month,
-            category_code=_required_env("OBLIDOG_CATEGORY_CODE"),
         )
 
         if obligations.count != 1:
@@ -45,4 +47,6 @@ def run() -> RunResult:
             f"Imported demo invoice {record.invoice_number}",
         )
         client.obligations.mark_ready(obligation.key)
-    return RunResult(changes_detected=True)
+        result = RunResult(changes_detected=True)
+        run.finish_success(changes_detected=result.changes_detected)
+        return result

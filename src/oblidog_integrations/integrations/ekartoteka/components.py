@@ -46,7 +46,6 @@ def sync_fee_components(
                 type="monthly_fee",
                 label=item.name,
                 amount=str(item.amount),
-                source="ekartoteka",
                 external_id=(
                     f"{component.premises.id}:{component.period.charge_id}:{index}"
                 ),

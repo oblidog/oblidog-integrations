@@ -1,3 +1,4 @@
+from contextlib import nullcontext
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
@@ -35,6 +36,17 @@ from oblidog_integrations.integrations.ekartoteka.obligations import (
 from oblidog_integrations.integrations.ekartoteka.schema import (
     settlement_snapshot_schema,
 )
+
+
+def _fake_integrations() -> SimpleNamespace:
+    return SimpleNamespace(
+        run=lambda: nullcontext(
+            SimpleNamespace(
+                context={"category": {"code": "FLAT"}},
+                finish_success=lambda **_: None,
+            )
+        )
+    )
 
 
 class FakeEkartotekaApi(EkartotekaApi):
@@ -580,6 +592,7 @@ def test_run_exports_the_snapshot_as_category_data(monkeypatch) -> None:
             captured["base_url"] = base_url
             captured["api_key"] = api_key
             self.category_data = self
+            self.integrations = _fake_integrations()
 
         def __enter__(self) -> Self:
             return self
@@ -587,11 +600,10 @@ def test_run_exports_the_snapshot_as_category_data(monkeypatch) -> None:
         def __exit__(self, *_: object) -> None:
             return None
 
-        def create(self, category_code: str, **kwargs: object) -> None:
-            captured["category_code"] = category_code
+        def create(self, **kwargs: object) -> None:
             captured.update(kwargs)
 
-        def latest(self, _: str) -> object:
+        def latest(self) -> object:
             raise OblidogApiError(404)
 
     monkeypatch.setattr(sync, "Ekartoteka", FakeSyncEkartoteka)
@@ -600,13 +612,9 @@ def test_run_exports_the_snapshot_as_category_data(monkeypatch) -> None:
     monkeypatch.setenv("EKARTOTEKA_PASSWORD", "password")
     monkeypatch.setenv("OBLIDOG_URL", "https://oblidog.example.com")
     monkeypatch.setenv("OBLIDOG_API_KEY", "api-key")
-    monkeypatch.setenv("OBLIDOG_CATEGORY_CODE", "FLAT")
-
     result = sync.run()
     assert result.changes_detected is True
 
-    assert captured["category_code"] == "FLAT"
-    assert captured["source"] == "ekartoteka"
     assert captured["data"] == snapshot.model_dump(mode="json")
     assert isinstance(captured["observed_at"], datetime)
 
@@ -636,7 +644,6 @@ def test_fee_components_are_upserted_with_provider_metadata() -> None:
             "type": "monthly_fee",
             "label": "Czynsz",
             "amount": "10",
-            "source": "ekartoteka",
             "external_id": "10:20:0",
             "metadata": {
                 "premises": {"id": 10, "code": "A-10", "address": "Testowa 10"},
@@ -735,17 +742,16 @@ def test_snapshot_identical_to_latest_category_data_is_not_exported() -> None:
     snapshot = Ekartoteka(api=FakeSnapshotApi()).get_settlement_snapshot(2026)  # type: ignore[arg-type]
     created: list[dict[str, object]] = []
     category_data = SimpleNamespace(
-        latest=lambda _: SimpleNamespace(
+        latest=lambda: SimpleNamespace(
             data=SimpleNamespace(to_dict=lambda: snapshot.model_dump(mode="json"))
         ),
-        create=lambda _, **kwargs: created.append(kwargs),
+        create=lambda **kwargs: created.append(kwargs),
     )
     oblidog = SimpleNamespace(category_data=category_data)
 
     result = export_snapshot(
         ekartoteka=Ekartoteka(api=FakeSnapshotApi()),  # type: ignore[arg-type]
         oblidog=oblidog,
-        category_code="FLAT",
         year=2026,
     )
 
@@ -757,27 +763,26 @@ def test_snapshot_identical_to_latest_category_data_is_not_exported() -> None:
 def test_snapshot_is_exported_when_sdk_reports_missing_data_as_404() -> None:
     created: list[dict[str, object]] = []
     category_data = SimpleNamespace(
-        latest=lambda _: (_ for _ in ()).throw(
+        latest=lambda: (_ for _ in ()).throw(
             UnexpectedStatus(404, b'{"detail":"Category data record not found"}')
         ),
-        create=lambda _, **kwargs: created.append(kwargs),
+        create=lambda **kwargs: created.append(kwargs),
     )
     oblidog = SimpleNamespace(category_data=category_data)
 
     result = export_snapshot(
         ekartoteka=Ekartoteka(api=FakeSnapshotApi()),  # type: ignore[arg-type]
         oblidog=oblidog,
-        category_code="FLAT",
         year=2026,
     )
 
     assert result.created
-    assert created[0]["source"] == "ekartoteka"
+    assert created[0]["data"]
 
 
 def test_snapshot_export_propagates_non_missing_oblidog_api_errors() -> None:
     class FailingCategoryData:
-        def latest(self, _: str) -> object:
+        def latest(self) -> object:
             raise OblidogApiError(500, b"upstream error")
 
     oblidog = SimpleNamespace(category_data=FailingCategoryData())
@@ -786,7 +791,6 @@ def test_snapshot_export_propagates_non_missing_oblidog_api_errors() -> None:
         export_snapshot(
             ekartoteka=Ekartoteka(api=FakeSnapshotApi()),  # type: ignore[arg-type]
             oblidog=oblidog,
-            category_code="FLAT",
             year=2026,
         )
 

@@ -20,20 +20,16 @@ def receivables_data(receivables: Receivables) -> dict[str, float]:
     }
 
 
-def export_receivables(
-    *, receivables: Receivables, oblidog: OblidogClient, category_code: str
-) -> bool:
+def export_receivables(*, receivables: Receivables, oblidog: OblidogClient) -> bool:
     """Create an observation only when its data differs from the latest one."""
     data = receivables_data(receivables)
     try:
-        latest = oblidog.category_data.latest(category_code).data.to_dict()
+        latest = oblidog.category_data.latest().data.to_dict()
     except (OblidogApiError, UnexpectedStatus) as error:
         if error.status_code != 404:
             raise
         latest: dict[str, Any] | None = None
     if latest == data:
         return False
-    oblidog.category_data.create(
-        category_code, observed_at=datetime.now(UTC), data=data, source="iprzedszkole"
-    )
+    oblidog.category_data.create(observed_at=datetime.now(UTC), data=data)
     return True

@@ -41,7 +41,6 @@ def sync_receivables_components(
             type="monthly_fee",
             label=label,
             amount=str(amount),
-            source="iprzedszkole",
             external_id=field,
             metadata={"fee_kind": field},
         )

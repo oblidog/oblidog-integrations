@@ -380,12 +380,16 @@ wheels = [
 
 [[package]]
 name = "oblidog-client"
-version = "0.1.0"
-source = { git = "https://github.com/oblidog/oblidog-client-python.git?rev=640f487166dd9a0703a100329d651d2dffbe045f#640f487166dd9a0703a100329d651d2dffbe045f" }
+version = "0.1.1rc1"
+source = { registry = "https://test.pypi.org/simple/" }
 dependencies = [
     { name = "attrs" },
     { name = "httpx" },
     { name = "pydantic" },
+]
+sdist = { url = "https://test-files.pythonhosted.org/packages/eb/21/68841f20a06805c6b378bbcc5594735ce81aa864606bcf386aafa15faf87/oblidog_client-0.1.1rc1.tar.gz", hash = "sha256:f3f27000bea07a61f77c60f765011ec79fa561cbf53e80f91c001efcbabc9d61", size = 111099, upload-time = "2026-09-11T19:15:04.215Z" }
+wheels = [
+    { url = "https://test-files.pythonhosted.org/packages/0c/15/14d9bc677ea69744504683edb6babe7bf0b6dc81dae111c2c79893aa654e/oblidog_client-0.1.1rc1-py3-none-any.whl", hash = "sha256:39787b85eeea696a5da77c26755cd625522410ead12392e7308f74d2c37df1f1", size = 68639, upload-time = "2026-09-11T19:15:02.822Z" },
 ]
 
 [[package]]
@@ -411,7 +415,7 @@ dev = [
 requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.12" },
     { name = "httpx", specifier = ">=0.27,<0.29" },
-    { name = "oblidog-client", git = "https://github.com/oblidog/oblidog-client-python.git?rev=640f487166dd9a0703a100329d651d2dffbe045f" },
+    { name = "oblidog-client", specifier = "==0.1.1rc1", index = "https://test.pypi.org/simple/" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "structlog", specifier = ">=25.0" },
 ]

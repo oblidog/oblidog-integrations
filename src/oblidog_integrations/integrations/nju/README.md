@@ -19,7 +19,6 @@ NJU_PHONE=...
 NJU_PASSWORD=...
 OBLIDOG_URL=https://...
 OBLIDOG_API_KEY=...
-OBLIDOG_CATEGORY_CODE=...
 ```
 
 `NJU_ACCOUNT_NAME` jest opcjonalny i służy wyłącznie do identyfikacji konta w
@@ -51,7 +50,7 @@ Integracja używa czasu `Europe/Warsaw`. Okres na portalu ma format `MM.RRRR`.
 Dla faktur bieżącego okresu targetem jest obligation:
 
 ```text
-<OBLIDOG_CATEGORY_CODE>-YYYY-MM
+<kod kategorii z kontekstu integracji>-YYYY-MM
 ```
 
 Faktury poprzedniego okresu są również odświeżane jako komponenty. Pozwala to
