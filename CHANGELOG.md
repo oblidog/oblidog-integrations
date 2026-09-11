@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.4.1 (2026-09-11)
+
+### Refactor
+
+- use integration category context (#26)
+
 ## v0.4.0 (2026-09-09)
 
 ### Feat
