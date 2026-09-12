@@ -27,8 +27,8 @@ CLI dispatches integrations through the shared lifecycle reporter.
 
 Python 3.12 and `uv` are used for dependency management.
 
-`oblidog-client 0.1.0` is currently resolved from TestPyPI. Its API key is
-scoped to exactly one integration and Oblidog category.
+`oblidog-client 0.1.2` is resolved from PyPI. Its API key is scoped to exactly
+one integration and Oblidog category.
 
 ```bash
 uv sync
@@ -167,9 +167,8 @@ account.
 
 ### Lifecycle reporting
 
-Each adapter uses its category-scoped `OBLIDOG_API_KEY` to read the
-authenticated integration context, including its category code, and starts one
-run before its Ledger writes.
+Each adapter uses its category-scoped `OBLIDOG_API_KEY` to read the typed
+authenticated integration context and starts one run before its Ledger writes.
 A successful adapter reports `success` with one of three change signals:
 `true`, `false`, or `null` when it cannot reliably decide. Provider or
 synchronization exceptions are reported by the SDK as sanitized failures and
@@ -264,9 +263,9 @@ required `ready` and optional `paid` transitions.
 
 Run every account in a separate one-shot Compose service with a separate
 credential file and Oblidog category. The default deployment contains two NJU
-account services. Give every account a distinct integration instance key; they
-can share the same ledger API key and still report independent run IDs and
-health. Create additional services and state volumes if more accounts are needed.
+account services. Give every account its own Ledger integration, category, and
+`OBLIDOG_API_KEY`, so runs and health are tracked independently. Create
+additional services and state volumes if more accounts are needed.
 
 ## Releases
 

@@ -72,7 +72,7 @@ def run() -> RunResult:
         ) as client,
         client.integrations.run() as run,
     ):
-        category_code = run.context["category"]["code"]
+        category_code = run.context.category.code
         snapshot_export = export_snapshot(
             ekartoteka=ekartoteka_client,
             oblidog=client,
@@ -83,7 +83,6 @@ def run() -> RunResult:
             sync_fee_components(
                 ekartoteka=ekartoteka_client,
                 oblidog=client,
-                category_code=category_code,
                 on=period,
             )
             for period in billing_periods
@@ -92,7 +91,6 @@ def run() -> RunResult:
             populate_obligation_when_fee_period_is_available(
                 ekartoteka=ekartoteka_client,
                 oblidog=client,
-                category_code=category_code,
                 on=period,
             )
             for period in billing_periods
@@ -100,7 +98,6 @@ def run() -> RunResult:
         obligation_check = mark_error_when_current_fee_period_is_missing(
             ekartoteka=ekartoteka_client,
             oblidog=client,
-            category_code=category_code,
             on=now.date(),
         )
         known_change = (
@@ -134,7 +131,7 @@ def run() -> RunResult:
     for components_sync in components_syncs:
         logger.info(
             "fee_components_synced",
-            obligation_key=components_sync.obligation_key,
+            obligation_period=str(components_sync.obligation_period),
             upserted_count=components_sync.upserted_count,
         )
     for obligation_data_sync in obligation_data_syncs:

@@ -380,16 +380,16 @@ wheels = [
 
 [[package]]
 name = "oblidog-client"
-version = "0.1.1rc1"
-source = { registry = "https://test.pypi.org/simple/" }
+version = "0.1.2"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
     { name = "httpx" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://test-files.pythonhosted.org/packages/eb/21/68841f20a06805c6b378bbcc5594735ce81aa864606bcf386aafa15faf87/oblidog_client-0.1.1rc1.tar.gz", hash = "sha256:f3f27000bea07a61f77c60f765011ec79fa561cbf53e80f91c001efcbabc9d61", size = 111099, upload-time = "2026-09-11T19:15:04.215Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/42/26/00cd17c5ba004a35697baf7ecfc6fe764417d2c9cf1a8093586cdef0a465/oblidog_client-0.1.2.tar.gz", hash = "sha256:7dd6d0eb7616181f7911b94ce7cb4cfc378871d094c7dfb4b4d78235af375fae", size = 111692, upload-time = "2026-09-12T06:36:26.138Z" }
 wheels = [
-    { url = "https://test-files.pythonhosted.org/packages/0c/15/14d9bc677ea69744504683edb6babe7bf0b6dc81dae111c2c79893aa654e/oblidog_client-0.1.1rc1-py3-none-any.whl", hash = "sha256:39787b85eeea696a5da77c26755cd625522410ead12392e7308f74d2c37df1f1", size = 68639, upload-time = "2026-09-11T19:15:02.822Z" },
+    { url = "https://files.pythonhosted.org/packages/6d/d4/87fce0fc80e40524cfd39c80c6593949b6cf836aea9e257b4f48fd446fd1/oblidog_client-0.1.2-py3-none-any.whl", hash = "sha256:7db4f6cbc9909b3a3afddfb5fe6e2a256abc70496fdbce6994b38e08b6ea7bce", size = 72012, upload-time = "2026-09-12T06:36:24.526Z" },
 ]
 
 [[package]]
@@ -415,7 +415,7 @@ dev = [
 requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.12" },
     { name = "httpx", specifier = ">=0.27,<0.29" },
-    { name = "oblidog-client", specifier = "==0.1.1rc1", index = "https://test.pypi.org/simple/" },
+    { name = "oblidog-client", specifier = "==0.1.2" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "structlog", specifier = ">=25.0" },
 ]

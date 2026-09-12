@@ -38,7 +38,7 @@ def run() -> RunResult:
         ) as oblidog,
         oblidog.integrations.run() as run,
     ):
-        category_code = run.context["category"]["code"]
+        category_code = run.context.category.code
         receivables = IprzedszkoleClient(
             kindergarten=_required_env("IPRZEDSZKOLE_KINDERGARTEN"),
             login=_required_env("IPRZEDSZKOLE_LOGIN"),
@@ -50,7 +50,6 @@ def run() -> RunResult:
         )
         components_sync = sync_receivables_components(
             oblidog=oblidog,
-            category_code=category_code,
             receivables=receivables,
             on=now.date(),
         )
@@ -73,7 +72,7 @@ def run() -> RunResult:
     logger.info(
         "iprzedszkole_receivables_components_synced",
         account=account_name,
-        obligation_key=components_sync.obligation_key,
+        obligation_period=str(components_sync.obligation_period),
         upserted_count=components_sync.upserted_count,
     )
     return result

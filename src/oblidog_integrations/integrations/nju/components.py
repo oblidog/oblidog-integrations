@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from oblidog_client import OblidogClient
+from oblidog_client import OblidogClient, ObligationPeriod
 
 from oblidog_integrations.integrations.nju.models import NjuInvoice
 
@@ -13,20 +13,20 @@ from oblidog_integrations.integrations.nju.models import NjuInvoice
 class InvoiceComponentsSyncResult:
     """Outcome of upserting invoices for one NJU obligation."""
 
-    obligation_key: str
+    obligation_period: ObligationPeriod
     upserted_count: int
 
 
 def sync_invoice_components(
     *,
     oblidog: OblidogClient,
-    obligation_key: str,
+    obligation_period: ObligationPeriod,
     invoices: list[NjuInvoice],
 ) -> InvoiceComponentsSyncResult:
     """Upsert one invoice component for every invoice in an obligation period."""
     for invoice in invoices:
         oblidog.obligations.upsert_component(
-            obligation_key,
+            obligation_period,
             type="invoice",
             label=invoice.document_number,
             amount=str(invoice.total_amount),
@@ -43,6 +43,6 @@ def sync_invoice_components(
             },
         )
     return InvoiceComponentsSyncResult(
-        obligation_key=obligation_key,
+        obligation_period=obligation_period,
         upserted_count=len(invoices),
     )
