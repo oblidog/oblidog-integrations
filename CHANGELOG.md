@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.4.2 (2026-09-12)
+
+### Fix
+
+- migrate integrations to oblidog client 0.1.2 (#29)
+
 ## v0.4.1 (2026-09-11)
 
 ### Refactor
