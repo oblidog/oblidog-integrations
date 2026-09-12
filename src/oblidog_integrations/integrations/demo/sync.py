@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime
 import os
 
-from oblidog_client import OblidogClient
+from oblidog_client import OblidogClient, ObligationPeriod
 
 from oblidog_integrations.integrations.demo.provider import fetch
 from oblidog_integrations.reporting import RunResult
@@ -37,16 +37,16 @@ def run() -> RunResult:
                 f"Expected exactly one matching obligation, got {obligations.count}"
             )
 
-        obligation = obligations.data[0]
+        period = ObligationPeriod(now.year, now.month)
         client.obligations.update(
-            obligation.key,
+            period,
             current_amount=str(record.amount),
         )
         client.obligations.append_note(
-            obligation.key,
+            period,
             f"Imported demo invoice {record.invoice_number}",
         )
-        client.obligations.mark_ready(obligation.key)
+        client.obligations.mark_ready(period)
         result = RunResult(changes_detected=True)
         run.finish_success(changes_detected=result.changes_detected)
         return result

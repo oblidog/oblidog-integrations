@@ -4,6 +4,8 @@ from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
 
+from oblidog_client import ObligationPeriod
+
 from oblidog_integrations.integrations.iprzedszkole.api import (
     aspnet_tokens,
     parse_receivables,
@@ -78,15 +80,14 @@ def test_parse_receivables_uses_current_period_and_fee_kinds() -> None:
 
 
 def test_sync_receivables_components_upserts_three_stable_components() -> None:
-    calls: list[tuple[str, dict[str, object]]] = []
+    calls: list[tuple[ObligationPeriod, dict[str, object]]] = []
 
     class Obligations:
-        def upsert_component(self, key: str, **kwargs: object) -> None:
-            calls.append((key, kwargs))
+        def upsert_component(self, period: ObligationPeriod, **kwargs: object) -> None:
+            calls.append((period, kwargs))
 
     result = sync_receivables_components(
         oblidog=SimpleNamespace(obligations=Obligations()),
-        category_code="KINDERGARTEN",
         receivables=Receivables(
             summary_to_pay=Decimal("12.34"),
             summary_paid=Decimal(0),
@@ -99,11 +100,11 @@ def test_sync_receivables_components_upserts_three_stable_components() -> None:
         on=date(2026, 9, 7),
     )
 
-    assert result.obligation_key == "KINDERGARTEN-2026-09"
+    assert result.obligation_period == ObligationPeriod(2026, 9)
     assert result.upserted_count == 3
     assert calls == [
         (
-            "KINDERGARTEN-2026-09",
+            ObligationPeriod(2026, 9),
             {
                 "type": "monthly_fee",
                 "label": "Opłata stała",
@@ -113,7 +114,7 @@ def test_sync_receivables_components_upserts_three_stable_components() -> None:
             },
         ),
         (
-            "KINDERGARTEN-2026-09",
+            ObligationPeriod(2026, 9),
             {
                 "type": "monthly_fee",
                 "label": "Wyżywienie",
@@ -123,7 +124,7 @@ def test_sync_receivables_components_upserts_three_stable_components() -> None:
             },
         ),
         (
-            "KINDERGARTEN-2026-09",
+            ObligationPeriod(2026, 9),
             {
                 "type": "monthly_fee",
                 "label": "Opłaty dodatkowe",

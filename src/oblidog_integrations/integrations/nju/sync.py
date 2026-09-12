@@ -9,7 +9,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import structlog
-from oblidog_client import OblidogClient, ObligationLifecycle
+from oblidog_client import OblidogClient, ObligationLifecycle, ObligationPeriod
 
 from oblidog_integrations.integrations.nju.api import (
     NjuClient,
@@ -54,10 +54,10 @@ def _invoices_for_period(
     return [invoice for invoice in invoices if invoice.accounting_period == period]
 
 
-def _obligation_key_for_period(*, category_code: str, period: str) -> str:
-    """Build an Oblidog obligation key from NJU's ``MM.YYYY`` period."""
+def _obligation_period_from_provider_period(period: str) -> ObligationPeriod:
+    """Convert NJU's ``MM.YYYY`` period to an Oblidog obligation period."""
     month, year = period.split(".")
-    return f"{category_code}-{year}-{month}"
+    return ObligationPeriod(year=int(year), month=int(month))
 
 
 def _log_recent_invoices(
@@ -131,6 +131,7 @@ def _reconcile_obligation(
     *,
     obligations: Any,
     obligation: Any,
+    period: ObligationPeriod,
     total: Decimal,
     issue_date: date,
     due_date: date,
@@ -146,10 +147,10 @@ def _reconcile_obligation(
     if lifecycle in _REOPENABLE_LIFECYCLES:
         if values_current and lifecycle == target_lifecycle:
             return False
-        obligations.reopen(obligation.key)
+        obligations.reopen(period)
         if not values_current:
             obligations.update(
-                obligation.key,
+                period,
                 current_amount=str(total),
                 issue_date=issue_date,
                 due_date=due_date,
@@ -157,7 +158,7 @@ def _reconcile_obligation(
     elif lifecycle in _EDITABLE_LIFECYCLES:
         if not values_current:
             obligations.update(
-                obligation.key,
+                period,
                 current_amount=str(total),
                 issue_date=issue_date,
                 due_date=due_date,
@@ -171,9 +172,9 @@ def _reconcile_obligation(
         )
         return False
 
-    obligations.mark_ready(obligation.key)
+    obligations.mark_ready(period)
     if paid:
-        obligations.mark_paid(obligation.key)
+        obligations.mark_paid(period)
     return True
 
 
@@ -211,7 +212,7 @@ def run() -> RunResult:
         ) as oblidog,
         oblidog.integrations.run() as run,
     ):
-        category_code = run.context["category"]["code"]
+        category_code = run.context.category.code
         if summary := getattr(nju, "account_summary", None):
             summary_export = export_account_summary(
                 summary=summary,
@@ -238,16 +239,15 @@ def run() -> RunResult:
         if previous_invoices:
             previous_components_sync = sync_invoice_components(
                 oblidog=oblidog,
-                obligation_key=_obligation_key_for_period(
-                    category_code=category_code,
-                    period=previous_period,
+                obligation_period=_obligation_period_from_provider_period(
+                    previous_period
                 ),
                 invoices=previous_invoices,
             )
             logger.info(
                 "nju_invoice_components_synced",
                 account=account_name,
-                obligation_key=previous_components_sync.obligation_key,
+                obligation_period=str(previous_components_sync.obligation_period),
                 upserted_count=previous_components_sync.upserted_count,
             )
             previous_components_upserted = previous_components_sync.upserted_count
@@ -278,9 +278,10 @@ def run() -> RunResult:
                 f"{obligations.count}"
             )
         obligation = obligations.data[0]
+        obligation_period = ObligationPeriod(now.year, now.month)
         components_sync = sync_invoice_components(
             oblidog=oblidog,
-            obligation_key=obligation.key,
+            obligation_period=obligation_period,
             invoices=invoices,
         )
         total = sum((invoice.total_amount for invoice in invoices), start=0)
@@ -290,6 +291,7 @@ def run() -> RunResult:
         changed = _reconcile_obligation(
             obligations=oblidog.obligations,
             obligation=obligation,
+            period=obligation_period,
             total=total,
             issue_date=issue_date,
             due_date=due_date,
@@ -320,7 +322,7 @@ def run() -> RunResult:
     logger.info(
         "nju_invoice_components_synced",
         account=account_name,
-        obligation_key=components_sync.obligation_key,
+        obligation_period=str(components_sync.obligation_period),
         upserted_count=components_sync.upserted_count,
     )
     return result

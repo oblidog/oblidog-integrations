@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from typing import Self
 
 import pytest
-from oblidog_client import OblidogApiError, ObligationLifecycle
+from oblidog_client import OblidogApiError, ObligationLifecycle, ObligationPeriod
 from oblidog_client.generated.errors import UnexpectedStatus
 
 from oblidog_integrations.integrations.nju import sync
@@ -31,7 +31,7 @@ def _fake_integrations() -> SimpleNamespace:
     return SimpleNamespace(
         run=lambda: nullcontext(
             SimpleNamespace(
-                context={"category": {"code": "NJU"}},
+                context=SimpleNamespace(category=SimpleNamespace(code="NJU")),
                 finish_success=lambda **_: None,
             )
         )
@@ -552,15 +552,15 @@ def test_invoice_components_are_upserted_with_invoice_metadata() -> None:
 
     result = sync_invoice_components(
         oblidog=oblidog,
-        obligation_key="NJU-2026-09",
+        obligation_period=ObligationPeriod(2026, 9),
         invoices=[invoice],
     )
 
-    assert result.obligation_key == "NJU-2026-09"
+    assert result.obligation_period == ObligationPeriod(2026, 9)
     assert result.upserted_count == 1
     assert upserts == [
         {
-            "obligation_key": "NJU-2026-09",
+            "obligation_key": ObligationPeriod(2026, 9),
             "type": "invoice",
             "label": "FV/2026/09/123",
             "amount": "12.34",
@@ -626,8 +626,8 @@ def test_run_upserts_components_for_the_previous_invoice_period(monkeypatch) -> 
     result = sync.run()
     assert result.changes_detected is None
 
-    assert upserts[0]["obligation_key"] == (
-        f"NJU-{previous_month.year}-{previous_month.month:02d}"
+    assert upserts[0]["obligation_key"] == ObligationPeriod(
+        previous_month.year, previous_month.month
     )
     assert upserts[0]["external_id"] == "FV/previous"
 
@@ -644,8 +644,8 @@ def test_run_updates_and_readies_an_unpaid_current_invoice(monkeypatch) -> None:
         status="niezapłacona",
     )
     updates: list[dict[str, object]] = []
-    marked_ready: list[str] = []
-    marked_paid: list[str] = []
+    marked_ready: list[ObligationPeriod] = []
+    marked_paid: list[ObligationPeriod] = []
     obligations = SimpleNamespace(
         list=lambda **_: SimpleNamespace(
             count=1,
@@ -695,13 +695,13 @@ def test_run_updates_and_readies_an_unpaid_current_invoice(monkeypatch) -> None:
 
     assert updates == [
         {
-            "key": "NJU-2026-09",
+            "key": ObligationPeriod(now.year, now.month),
             "current_amount": "12.34",
             "issue_date": now.date(),
             "due_date": date(now.year, now.month, 15),
         }
     ]
-    assert marked_ready == ["NJU-2026-09"]
+    assert marked_ready == [ObligationPeriod(now.year, now.month)]
     assert not marked_paid
 
 
@@ -716,7 +716,7 @@ def test_run_marks_a_fully_paid_current_invoice_as_paid(monkeypatch) -> None:
         accounting_period=now.strftime("%m.%Y"),
         status="zapłacona",
     )
-    marked_paid: list[str] = []
+    marked_paid: list[ObligationPeriod] = []
     obligations = SimpleNamespace(
         list=lambda **_: SimpleNamespace(
             count=1,
@@ -764,7 +764,7 @@ def test_run_marks_a_fully_paid_current_invoice_as_paid(monkeypatch) -> None:
     result = sync.run()
     assert result.changes_detected is True
 
-    assert marked_paid == ["NJU-2026-09"]
+    assert marked_paid == [ObligationPeriod(now.year, now.month)]
 
 
 def test_login_form_response_is_rejected_after_authentication() -> None:
@@ -785,7 +785,7 @@ def test_reconcile_obligation_reopens_only_when_closed_data_or_status_changed() 
     )
 
     class LifecycleEnforcingObligations:
-        def reopen(self, key: str) -> None:
+        def reopen(self, key: ObligationPeriod) -> None:
             assert obligation.lifecycle in {
                 ObligationLifecycle.READY,
                 ObligationLifecycle.PAID,
@@ -793,11 +793,11 @@ def test_reconcile_obligation_reopens_only_when_closed_data_or_status_changed() 
             calls.append(f"reopen:{key}")
             obligation.lifecycle = ObligationLifecycle.COLLECTING_DATA
 
-        def update(self, key: str, **_: object) -> None:
+        def update(self, key: ObligationPeriod, **_: object) -> None:
             assert obligation.lifecycle is ObligationLifecycle.COLLECTING_DATA
             calls.append(f"update:{key}")
 
-        def mark_ready(self, key: str) -> None:
+        def mark_ready(self, key: ObligationPeriod) -> None:
             assert obligation.lifecycle in {
                 ObligationLifecycle.DRAFT,
                 ObligationLifecycle.COLLECTING_DATA,
@@ -805,7 +805,7 @@ def test_reconcile_obligation_reopens_only_when_closed_data_or_status_changed() 
             calls.append(f"ready:{key}")
             obligation.lifecycle = ObligationLifecycle.READY
 
-        def mark_paid(self, key: str) -> None:
+        def mark_paid(self, key: ObligationPeriod) -> None:
             assert obligation.lifecycle is ObligationLifecycle.READY
             calls.append(f"paid:{key}")
             obligation.lifecycle = ObligationLifecycle.PAID
@@ -815,6 +815,7 @@ def test_reconcile_obligation_reopens_only_when_closed_data_or_status_changed() 
     unchanged = sync._reconcile_obligation(
         obligations=obligations,
         obligation=obligation,
+        period=ObligationPeriod(2026, 9),
         total=Decimal("12.34"),
         issue_date=date(2026, 9, 1),
         due_date=date(2026, 9, 15),
@@ -828,6 +829,7 @@ def test_reconcile_obligation_reopens_only_when_closed_data_or_status_changed() 
     changed = sync._reconcile_obligation(
         obligations=obligations,
         obligation=obligation,
+        period=ObligationPeriod(2026, 9),
         total=Decimal("12.34"),
         issue_date=date(2026, 9, 1),
         due_date=date(2026, 9, 15),
@@ -836,10 +838,10 @@ def test_reconcile_obligation_reopens_only_when_closed_data_or_status_changed() 
 
     assert changed
     assert calls == [
-        "reopen:NJU-2026-09",
-        "update:NJU-2026-09",
-        "ready:NJU-2026-09",
-        "paid:NJU-2026-09",
+        "reopen:2026-09",
+        "update:2026-09",
+        "ready:2026-09",
+        "paid:2026-09",
     ]
 
 
@@ -854,16 +856,16 @@ def test_reconcile_obligation_marks_ready_before_paid_from_collecting_data() -> 
     )
 
     class LifecycleEnforcingObligations:
-        def update(self, key: str, **_: object) -> None:
+        def update(self, key: ObligationPeriod, **_: object) -> None:
             assert obligation.lifecycle is ObligationLifecycle.COLLECTING_DATA
             calls.append(f"update:{key}")
 
-        def mark_ready(self, key: str) -> None:
+        def mark_ready(self, key: ObligationPeriod) -> None:
             assert obligation.lifecycle is ObligationLifecycle.COLLECTING_DATA
             calls.append(f"ready:{key}")
             obligation.lifecycle = ObligationLifecycle.READY
 
-        def mark_paid(self, key: str) -> None:
+        def mark_paid(self, key: ObligationPeriod) -> None:
             assert obligation.lifecycle is ObligationLifecycle.READY
             calls.append(f"paid:{key}")
             obligation.lifecycle = ObligationLifecycle.PAID
@@ -871,6 +873,7 @@ def test_reconcile_obligation_marks_ready_before_paid_from_collecting_data() -> 
     changed = sync._reconcile_obligation(
         obligations=LifecycleEnforcingObligations(),
         obligation=obligation,
+        period=ObligationPeriod(2026, 9),
         total=Decimal("12.34"),
         issue_date=date(2026, 9, 1),
         due_date=date(2026, 9, 15),
@@ -879,9 +882,9 @@ def test_reconcile_obligation_marks_ready_before_paid_from_collecting_data() -> 
 
     assert changed
     assert calls == [
-        "update:NJU-2026-09",
-        "ready:NJU-2026-09",
-        "paid:NJU-2026-09",
+        "update:2026-09",
+        "ready:2026-09",
+        "paid:2026-09",
     ]
 
 
@@ -896,7 +899,7 @@ def test_reconcile_obligation_updates_issue_date_before_ready_from_draft() -> No
     )
 
     class LifecycleEnforcingObligations:
-        def update(self, key: str, **kwargs: object) -> None:
+        def update(self, key: ObligationPeriod, **kwargs: object) -> None:
             assert obligation.lifecycle is ObligationLifecycle.DRAFT
             assert kwargs == {
                 "current_amount": "12.34",
@@ -906,17 +909,18 @@ def test_reconcile_obligation_updates_issue_date_before_ready_from_draft() -> No
             calls.append(f"update:{key}")
             obligation.lifecycle = ObligationLifecycle.COLLECTING_DATA
 
-        def mark_ready(self, key: str) -> None:
+        def mark_ready(self, key: ObligationPeriod) -> None:
             assert obligation.lifecycle is ObligationLifecycle.COLLECTING_DATA
             calls.append(f"ready:{key}")
             obligation.lifecycle = ObligationLifecycle.READY
 
-        def mark_paid(self, _: str) -> None:
+        def mark_paid(self, _: ObligationPeriod) -> None:
             pytest.fail("An unpaid invoice must not be marked paid")
 
     changed = sync._reconcile_obligation(
         obligations=LifecycleEnforcingObligations(),
         obligation=obligation,
+        period=ObligationPeriod(2026, 9),
         total=Decimal("12.34"),
         issue_date=date(2026, 9, 1),
         due_date=date(2026, 9, 15),
@@ -924,4 +928,4 @@ def test_reconcile_obligation_updates_issue_date_before_ready_from_draft() -> No
     )
 
     assert changed
-    assert calls == ["update:NJU-2026-09", "ready:NJU-2026-09"]
+    assert calls == ["update:2026-09", "ready:2026-09"]

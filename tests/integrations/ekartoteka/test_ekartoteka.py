@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from typing import Self
 
 import pytest
-from oblidog_client import OblidogApiError, ObligationLifecycle
+from oblidog_client import OblidogApiError, ObligationLifecycle, ObligationPeriod
 from oblidog_client.generated.errors import UnexpectedStatus
 
 from oblidog_integrations.integrations.ekartoteka import sync
@@ -42,7 +42,7 @@ def _fake_integrations() -> SimpleNamespace:
     return SimpleNamespace(
         run=lambda: nullcontext(
             SimpleNamespace(
-                context={"category": {"code": "FLAT"}},
+                context=SimpleNamespace(category=SimpleNamespace(code="FLAT")),
                 finish_success=lambda **_: None,
             )
         )
@@ -362,7 +362,7 @@ def test_incomplete_settlements_do_not_update_or_ready_an_obligation() -> None:
             return FakeSnapshotApi().get_annual_ledger(account_id)
 
     updates: list[dict[str, object]] = []
-    marked_ready: list[str] = []
+    marked_ready: list[ObligationPeriod] = []
     oblidog = SimpleNamespace(
         obligations=SimpleNamespace(
             get=lambda key: SimpleNamespace(
@@ -379,7 +379,6 @@ def test_incomplete_settlements_do_not_update_or_ready_an_obligation() -> None:
         populate_obligation_when_fee_period_is_available(
             ekartoteka=Ekartoteka(api=IncompleteComponentsApi()),  # type: ignore[arg-type]
             oblidog=oblidog,
-            category_code="FLAT",
             on=date(2026, 10, 3),
         )
 
@@ -632,15 +631,14 @@ def test_fee_components_are_upserted_with_provider_metadata() -> None:
     result = sync_fee_components(
         ekartoteka=Ekartoteka(api=FakeComponentsApi()),  # type: ignore[arg-type]
         oblidog=oblidog,
-        category_code="FLAT",
         on=date(2026, 10, 3),
     )
 
-    assert result.obligation_key == "FLAT-2026-10"
+    assert result.obligation_period == ObligationPeriod(2026, 10)
     assert result.upserted_count == 1
     assert upserts == [
         {
-            "obligation_key": "FLAT-2026-10",
+            "obligation_key": ObligationPeriod(2026, 10),
             "type": "monthly_fee",
             "label": "Czynsz",
             "amount": "10",
@@ -680,10 +678,10 @@ def test_published_fees_populate_and_ready_draft_or_collecting_obligation() -> N
         ObligationLifecycle.COLLECTING_DATA,
     ):
         updates: list[dict[str, object]] = []
-        marked_ready: list[str] = []
+        marked_ready: list[ObligationPeriod] = []
         obligations = SimpleNamespace(
-            get=lambda key, lifecycle=lifecycle: SimpleNamespace(
-                key=key, lifecycle=lifecycle
+            get=lambda _period, lifecycle=lifecycle: SimpleNamespace(
+                key="FLAT-2026-10", lifecycle=lifecycle
             ),
             update=lambda key, updates=updates, **kwargs: updates.append(
                 {"obligation_key": key, **kwargs}
@@ -695,7 +693,6 @@ def test_published_fees_populate_and_ready_draft_or_collecting_obligation() -> N
         result = populate_obligation_when_fee_period_is_available(
             ekartoteka=Ekartoteka(api=FakeComponentsApi()),  # type: ignore[arg-type]
             oblidog=oblidog,
-            category_code="FLAT",
             on=date(2026, 10, 3),
         )
 
@@ -705,20 +702,22 @@ def test_published_fees_populate_and_ready_draft_or_collecting_obligation() -> N
         assert result.due_date == date(2026, 10, 15)
         assert updates == [
             {
-                "obligation_key": "FLAT-2026-10",
+                "obligation_key": ObligationPeriod(2026, 10),
                 "current_amount": "120",
                 "issue_date": date(2026, 9, 1),
                 "due_date": date(2026, 10, 15),
             }
         ]
-        assert marked_ready == ["FLAT-2026-10"]
+        assert marked_ready == [ObligationPeriod(2026, 10)]
 
 
 def test_published_fees_do_not_overwrite_ready_obligation() -> None:
     updates: list[dict[str, object]] = []
-    marked_ready: list[str] = []
+    marked_ready: list[ObligationPeriod] = []
     obligations = SimpleNamespace(
-        get=lambda key: SimpleNamespace(key=key, lifecycle=ObligationLifecycle.READY),
+        get=lambda _period: SimpleNamespace(
+            key="FLAT-2026-10", lifecycle=ObligationLifecycle.READY
+        ),
         update=lambda key, **kwargs: updates.append({"obligation_key": key, **kwargs}),
         mark_ready=marked_ready.append,
     )
@@ -727,7 +726,6 @@ def test_published_fees_do_not_overwrite_ready_obligation() -> None:
     result = populate_obligation_when_fee_period_is_available(
         ekartoteka=Ekartoteka(api=FakeComponentsApi()),  # type: ignore[arg-type]
         oblidog=oblidog,
-        category_code="FLAT",
         on=date(2026, 10, 3),
     )
 
@@ -796,10 +794,10 @@ def test_snapshot_export_propagates_non_missing_oblidog_api_errors() -> None:
 
 
 def test_missing_fee_period_marks_non_collecting_obligation_as_error() -> None:
-    marked_as_error: list[str] = []
+    marked_as_error: list[ObligationPeriod] = []
     obligations = SimpleNamespace(
-        get=lambda key: SimpleNamespace(
-            key=key,
+        get=lambda _period: SimpleNamespace(
+            key="FLAT-2026-09",
             lifecycle=ObligationLifecycle.READY,
         ),
         mark_error=marked_as_error.append,
@@ -810,21 +808,20 @@ def test_missing_fee_period_marks_non_collecting_obligation_as_error() -> None:
     result = mark_error_when_current_fee_period_is_missing(
         ekartoteka=ekartoteka,
         oblidog=oblidog,
-        category_code="FLAT",
         on=date(2026, 9, 3),
     )
 
     assert result.marked_as_error
     assert not result.fee_period_available
     assert result.lifecycle is ObligationLifecycle.READY
-    assert marked_as_error == ["FLAT-2026-09"]
+    assert marked_as_error == [ObligationPeriod(2026, 9)]
 
 
 def test_missing_fee_period_keeps_collecting_obligation_unchanged() -> None:
-    marked_as_error: list[str] = []
+    marked_as_error: list[ObligationPeriod] = []
     obligations = SimpleNamespace(
-        get=lambda key: SimpleNamespace(
-            key=key,
+        get=lambda _period: SimpleNamespace(
+            key="FLAT-2026-09",
             lifecycle=ObligationLifecycle.COLLECTING_DATA,
         ),
         mark_error=marked_as_error.append,
@@ -835,7 +832,6 @@ def test_missing_fee_period_keeps_collecting_obligation_unchanged() -> None:
     result = mark_error_when_current_fee_period_is_missing(
         ekartoteka=ekartoteka,
         oblidog=oblidog,
-        category_code="FLAT",
         on=date(2026, 9, 3),
     )
 

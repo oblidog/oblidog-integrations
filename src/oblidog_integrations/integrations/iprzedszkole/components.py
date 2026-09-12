@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 
-from oblidog_client import OblidogClient
+from oblidog_client import OblidogClient, ObligationPeriod
 
 from oblidog_integrations.integrations.iprzedszkole.models import Receivables
 
@@ -14,7 +14,7 @@ from oblidog_integrations.integrations.iprzedszkole.models import Receivables
 class ReceivablesComponentsSyncResult:
     """Outcome of writing iPrzedszkole components for one obligation."""
 
-    obligation_key: str
+    obligation_period: ObligationPeriod
     upserted_count: int
 
 
@@ -28,16 +28,15 @@ _COMPONENTS = (
 def sync_receivables_components(
     *,
     oblidog: OblidogClient,
-    category_code: str,
     receivables: Receivables,
     on: date,
 ) -> ReceivablesComponentsSyncResult:
     """Upsert the fixed, meal and additional fees for the current month."""
-    obligation_key = f"{category_code}-{on.year:04d}-{on.month:02d}"
+    obligation_period = ObligationPeriod(on.year, on.month)
     for field, label in _COMPONENTS:
         amount = getattr(receivables, field)
         oblidog.obligations.upsert_component(
-            obligation_key,
+            obligation_period,
             type="monthly_fee",
             label=label,
             amount=str(amount),
@@ -45,6 +44,6 @@ def sync_receivables_components(
             metadata={"fee_kind": field},
         )
     return ReceivablesComponentsSyncResult(
-        obligation_key=obligation_key,
+        obligation_period=obligation_period,
         upserted_count=len(_COMPONENTS),
     )
