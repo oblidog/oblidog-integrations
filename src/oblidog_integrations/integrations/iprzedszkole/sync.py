@@ -54,11 +54,7 @@ def run() -> RunResult:
             on=now.date(),
         )
         result = RunResult(
-            changes_detected=True
-            if created
-            else None
-            if components_sync.upserted_count
-            else False
+            changes_detected=created or bool(components_sync.changed_count)
         )
         run.finish_success(changes_detected=result.changes_detected)
     logger.info(
@@ -73,6 +69,7 @@ def run() -> RunResult:
         "iprzedszkole_receivables_components_synced",
         account=account_name,
         obligation_period=str(components_sync.obligation_period),
-        upserted_count=components_sync.upserted_count,
+        processed_count=components_sync.processed_count,
+        changed_count=components_sync.changed_count,
     )
     return result

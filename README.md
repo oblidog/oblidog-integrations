@@ -27,7 +27,7 @@ CLI dispatches integrations through the shared lifecycle reporter.
 
 Python 3.12 and `uv` are used for dependency management.
 
-`oblidog-client 0.1.2` is resolved from PyPI. Its API key is scoped to exactly
+`oblidog-client 0.2.0` is resolved from PyPI. Its API key is scoped to exactly
 one integration and Oblidog category.
 
 ```bash

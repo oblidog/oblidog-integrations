@@ -104,16 +104,9 @@ def run() -> RunResult:
             snapshot_export.created
             or any(result.updated for result in obligation_data_syncs)
             or obligation_check.marked_as_error
+            or any(sync.changed_count for sync in components_syncs)
         )
-        result = RunResult(
-            changes_detected=(
-                True
-                if known_change
-                else None
-                if any(sync.upserted_count for sync in components_syncs)
-                else False
-            )
-        )
+        result = RunResult(changes_detected=known_change)
         run.finish_success(changes_detected=result.changes_detected)
     if snapshot_export.created:
         logger.info(
@@ -132,7 +125,8 @@ def run() -> RunResult:
         logger.info(
             "fee_components_synced",
             obligation_period=str(components_sync.obligation_period),
-            upserted_count=components_sync.upserted_count,
+            processed_count=components_sync.processed_count,
+            changed_count=components_sync.changed_count,
         )
     for obligation_data_sync in obligation_data_syncs:
         if obligation_data_sync.updated:
