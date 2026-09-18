@@ -5,7 +5,12 @@ from types import SimpleNamespace
 from typing import Self
 
 import pytest
-from oblidog_client import OblidogApiError, ObligationLifecycle, ObligationPeriod
+from oblidog_client import (
+    MutationResult,
+    OblidogApiError,
+    ObligationLifecycle,
+    ObligationPeriod,
+)
 from oblidog_client.generated.errors import UnexpectedStatus
 
 from oblidog_integrations.integrations.ekartoteka import sync
@@ -620,12 +625,13 @@ def test_run_exports_the_snapshot_as_category_data(monkeypatch) -> None:
 
 def test_fee_components_are_upserted_with_provider_metadata() -> None:
     upserts: list[dict[str, object]] = []
+
+    def upsert_component(obligation_key: ObligationPeriod, **kwargs: object) -> object:
+        upserts.append({"obligation_key": obligation_key, **kwargs})
+        return SimpleNamespace(result=MutationResult.UPDATED)
+
     oblidog = SimpleNamespace(
-        obligations=SimpleNamespace(
-            upsert_component=lambda obligation_key, **kwargs: upserts.append(
-                {"obligation_key": obligation_key, **kwargs}
-            )
-        )
+        obligations=SimpleNamespace(upsert_component=upsert_component)
     )
 
     result = sync_fee_components(
@@ -635,7 +641,8 @@ def test_fee_components_are_upserted_with_provider_metadata() -> None:
     )
 
     assert result.obligation_period == ObligationPeriod(2026, 10)
-    assert result.upserted_count == 1
+    assert result.processed_count == 1
+    assert result.changed_count == 1
     assert upserts == [
         {
             "obligation_key": ObligationPeriod(2026, 10),

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 
-from oblidog_client import OblidogClient, ObligationPeriod
+from oblidog_client import MutationResult, OblidogClient, ObligationPeriod
 
 from oblidog_integrations.integrations.ekartoteka.ekartoteka import Ekartoteka
 
@@ -15,7 +15,8 @@ class FeeComponentsSyncResult:
     """Outcome of upserting e-Kartoteka fees for one obligation."""
 
     obligation_period: ObligationPeriod
-    upserted_count: int
+    processed_count: int
+    changed_count: int
 
 
 def sync_fee_components(
@@ -33,13 +34,14 @@ def sync_fee_components(
             the preceding month.
 
     Returns:
-        The target obligation period and number of upserted fee items.
+        The target obligation period and component processing statistics.
     """
     obligation_period = ObligationPeriod(on.year, on.month)
-    upserted_count = 0
+    processed_count = 0
+    changed_count = 0
     for component in ekartoteka.get_current_fee_components(on):
         for index, item in enumerate(component.items):
-            oblidog.obligations.upsert_component(
+            result = oblidog.obligations.upsert_component(
                 obligation_period,
                 type="monthly_fee",
                 label=item.name,
@@ -53,8 +55,11 @@ def sync_fee_components(
                     "fee": item.model_dump(mode="json"),
                 },
             )
-            upserted_count += 1
+            processed_count += 1
+            if result.result is not MutationResult.UNCHANGED:
+                changed_count += 1
     return FeeComponentsSyncResult(
         obligation_period=obligation_period,
-        upserted_count=upserted_count,
+        processed_count=processed_count,
+        changed_count=changed_count,
     )

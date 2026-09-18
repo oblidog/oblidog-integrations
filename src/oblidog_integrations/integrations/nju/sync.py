@@ -204,7 +204,7 @@ def run() -> RunResult:
     previous_period = _previous_period(now)
     previous_invoices = _invoices_for_period(all_invoices, period=previous_period)
     summary_changed = False
-    previous_components_upserted = 0
+    previous_components_changed = 0
     with (
         OblidogClient(
             base_url=_required_env("OBLIDOG_URL"),
@@ -248,9 +248,10 @@ def run() -> RunResult:
                 "nju_invoice_components_synced",
                 account=account_name,
                 obligation_period=str(previous_components_sync.obligation_period),
-                upserted_count=previous_components_sync.upserted_count,
+                processed_count=previous_components_sync.processed_count,
+                changed_count=previous_components_sync.changed_count,
             )
-            previous_components_upserted = previous_components_sync.upserted_count
+            previous_components_changed = previous_components_sync.changed_count
         if not invoices:
             logger.info(
                 "nju_invoices_absent",
@@ -258,13 +259,7 @@ def run() -> RunResult:
                 period=now.strftime("%m.%Y"),
             )
             result = RunResult(
-                changes_detected=(
-                    True
-                    if summary_changed
-                    else None
-                    if previous_components_upserted
-                    else False
-                )
+                changes_detected=summary_changed or bool(previous_components_changed)
             )
             run.finish_success(changes_detected=result.changes_detected)
             return result
@@ -299,11 +294,10 @@ def run() -> RunResult:
         )
         result = RunResult(
             changes_detected=(
-                True
-                if summary_changed or changed
-                else None
-                if previous_components_upserted or components_sync.upserted_count
-                else False
+                summary_changed
+                or changed
+                or bool(previous_components_changed)
+                or bool(components_sync.changed_count)
             )
         )
         run.finish_success(changes_detected=result.changes_detected)
@@ -323,6 +317,7 @@ def run() -> RunResult:
         "nju_invoice_components_synced",
         account=account_name,
         obligation_period=str(components_sync.obligation_period),
-        upserted_count=components_sync.upserted_count,
+        processed_count=components_sync.processed_count,
+        changed_count=components_sync.changed_count,
     )
     return result

@@ -7,7 +7,12 @@ from types import SimpleNamespace
 from typing import Self
 
 import pytest
-from oblidog_client import OblidogApiError, ObligationLifecycle, ObligationPeriod
+from oblidog_client import (
+    MutationResult,
+    OblidogApiError,
+    ObligationLifecycle,
+    ObligationPeriod,
+)
 from oblidog_client.generated.errors import UnexpectedStatus
 
 from oblidog_integrations.integrations.nju import sync
@@ -533,12 +538,13 @@ def test_log_recent_invoices_prefers_the_current_month(monkeypatch) -> None:
 
 def test_invoice_components_are_upserted_with_invoice_metadata() -> None:
     upserts: list[dict[str, object]] = []
+
+    def upsert_component(obligation_key: ObligationPeriod, **kwargs: object) -> object:
+        upserts.append({"obligation_key": obligation_key, **kwargs})
+        return SimpleNamespace(result=MutationResult.CREATED)
+
     oblidog = SimpleNamespace(
-        obligations=SimpleNamespace(
-            upsert_component=lambda obligation_key, **kwargs: upserts.append(
-                {"obligation_key": obligation_key, **kwargs}
-            )
-        )
+        obligations=SimpleNamespace(upsert_component=upsert_component)
     )
     invoice = NjuInvoice(
         document_number="FV/2026/09/123",
@@ -557,7 +563,8 @@ def test_invoice_components_are_upserted_with_invoice_metadata() -> None:
     )
 
     assert result.obligation_period == ObligationPeriod(2026, 9)
-    assert result.upserted_count == 1
+    assert result.processed_count == 1
+    assert result.changed_count == 1
     assert upserts == [
         {
             "obligation_key": ObligationPeriod(2026, 9),
@@ -592,11 +599,14 @@ def test_run_upserts_components_for_the_previous_invoice_period(monkeypatch) -> 
         status="zapłacona",
     )
     upserts: list[dict[str, object]] = []
+
+    def upsert_component(obligation_key: ObligationPeriod, **kwargs: object) -> object:
+        upserts.append({"obligation_key": obligation_key, **kwargs})
+        return SimpleNamespace(result=MutationResult.CREATED)
+
     obligations = SimpleNamespace(
         list=lambda **_: pytest.fail("current obligation should not be fetched"),
-        upsert_component=lambda obligation_key, **kwargs: upserts.append(
-            {"obligation_key": obligation_key, **kwargs}
-        ),
+        upsert_component=upsert_component,
     )
 
     class FakeNjuClient:
@@ -624,7 +634,7 @@ def test_run_upserts_components_for_the_previous_invoice_period(monkeypatch) -> 
     monkeypatch.setenv("OBLIDOG_URL", "https://oblidog.example.com")
     monkeypatch.setenv("OBLIDOG_API_KEY", "api-key")
     result = sync.run()
-    assert result.changes_detected is None
+    assert result.changes_detected is True
 
     assert upserts[0]["obligation_key"] == ObligationPeriod(
         previous_month.year, previous_month.month
@@ -663,7 +673,9 @@ def test_run_updates_and_readies_an_unpaid_current_invoice(monkeypatch) -> None:
         mark_ready=marked_ready.append,
         mark_paid=marked_paid.append,
         reopen=lambda _: None,
-        upsert_component=lambda *_args, **_kwargs: None,
+        upsert_component=lambda *_args, **_kwargs: SimpleNamespace(
+            result=MutationResult.UNCHANGED
+        ),
     )
 
     class FakeNjuClient:
@@ -734,7 +746,9 @@ def test_run_marks_a_fully_paid_current_invoice_as_paid(monkeypatch) -> None:
         mark_ready=lambda _: None,
         mark_paid=marked_paid.append,
         reopen=lambda _: None,
-        upsert_component=lambda *_args, **_kwargs: None,
+        upsert_component=lambda *_args, **_kwargs: SimpleNamespace(
+            result=MutationResult.UNCHANGED
+        ),
     )
 
     class FakeNjuClient:

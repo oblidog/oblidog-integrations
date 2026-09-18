@@ -4,7 +4,7 @@ from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
 
-from oblidog_client import ObligationPeriod
+from oblidog_client import MutationResult, ObligationPeriod
 
 from oblidog_integrations.integrations.iprzedszkole.api import (
     aspnet_tokens,
@@ -81,10 +81,16 @@ def test_parse_receivables_uses_current_period_and_fee_kinds() -> None:
 
 def test_sync_receivables_components_upserts_three_stable_components() -> None:
     calls: list[tuple[ObligationPeriod, dict[str, object]]] = []
+    results = iter(
+        [MutationResult.CREATED, MutationResult.UPDATED, MutationResult.UNCHANGED]
+    )
 
     class Obligations:
-        def upsert_component(self, period: ObligationPeriod, **kwargs: object) -> None:
+        def upsert_component(
+            self, period: ObligationPeriod, **kwargs: object
+        ) -> object:
             calls.append((period, kwargs))
+            return SimpleNamespace(result=next(results))
 
     result = sync_receivables_components(
         oblidog=SimpleNamespace(obligations=Obligations()),
@@ -101,7 +107,8 @@ def test_sync_receivables_components_upserts_three_stable_components() -> None:
     )
 
     assert result.obligation_period == ObligationPeriod(2026, 9)
-    assert result.upserted_count == 3
+    assert result.processed_count == 3
+    assert result.changed_count == 2
     assert calls == [
         (
             ObligationPeriod(2026, 9),
