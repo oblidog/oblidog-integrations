@@ -1,6 +1,8 @@
 name: Publish container image
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       release_tag:
@@ -13,7 +15,7 @@ permissions:
   packages: write
 
 concurrency:
-  group: publish-images-${{ inputs.release_tag }}
+  group: publish-images-${{ github.event.release.tag_name || inputs.release_tag }}
   cancel-in-progress: false
 
 jobs:
@@ -22,16 +24,16 @@ jobs:
     steps:
       - name: Validate release tag
         env:
-          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
         run: |
           [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.release_tag }}
+          ref: ${{ github.event.release.tag_name || inputs.release_tag }}
       - name: Confirm the tag has a GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
         run: gh release view "$RELEASE_TAG" >/dev/null
       - uses: docker/setup-qemu-action@v4
       - uses: docker/setup-buildx-action@v4
@@ -44,7 +46,7 @@ jobs:
         id: metadata
         with:
           images: ghcr.io/${{ github.repository_owner }}/oblidog-integrations
-          tags: type=raw,value=${{ inputs.release_tag }}
+          tags: type=raw,value=${{ github.event.release.tag_name || inputs.release_tag }}
       - uses: docker/build-push-action@v7
         with:
           context: .

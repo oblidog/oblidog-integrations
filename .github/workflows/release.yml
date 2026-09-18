@@ -86,4 +86,4 @@ jobs:
           fi
           gh pr create --base main --head "$RELEASE_BRANCH" \
             --title "bump: version $RELEASE_VERSION" \
-            --body "Automated release preparation for v$RELEASE_VERSION. Merge after checks pass to create the tag, GitHub Release, and GHCR image."
+            --body "Automated release preparation for v$RELEASE_VERSION. Merge after checks pass. The workflow will create a draft GitHub Release from CHANGELOG.md; publish that draft to build and publish the GHCR image."
