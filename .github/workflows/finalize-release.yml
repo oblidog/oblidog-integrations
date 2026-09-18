@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: write
-  actions: write
 
 jobs:
   finalize-release:
@@ -38,15 +37,21 @@ jobs:
           tag="v${RELEASE_VERSION}"
           git rev-parse -q --verify "refs/tags/$tag" >/dev/null || git tag -a "$tag" -m "$tag"
           git push origin "$tag"
-      - name: Create GitHub Release
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Extract release notes
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: python scripts/extract_release_notes.py "v${RELEASE_VERSION}" release-notes.md
+      - name: Create draft GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
         run: |
           gh release view "v${RELEASE_VERSION}" >/dev/null 2>&1 || \
-            gh release create "v${RELEASE_VERSION}" --title "v${RELEASE_VERSION}" --generate-notes
-      - name: Trigger image publishing
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_VERSION: ${{ steps.version.outputs.version }}
-        run: gh workflow run publish-images.yml --ref "v${RELEASE_VERSION}" -f release_tag="v${RELEASE_VERSION}"
+            gh release create "v${RELEASE_VERSION}" \
+              --draft \
+              --verify-tag \
+              --title "v${RELEASE_VERSION}" \
+              --notes-file release-notes.md

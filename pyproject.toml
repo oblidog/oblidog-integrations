@@ -26,6 +26,8 @@ dev = [
 name = "cz_conventional_commits"
 tag_format = "v$version"
 update_changelog_on_bump = true
+changelog_incremental = true
+changelog_file = "CHANGELOG.md"
 pre_bump_hooks = ["uv lock"]
 version_provider = "commitizen"
 version = "0.4.3"
@@ -44,7 +46,7 @@ target-version = "py312"
 line-length = 88
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["src", "."]
 testpaths = ["tests"]
 markers = [
   "ekartoteka_e2e: read-only tests against the live e-Kartoteka API",

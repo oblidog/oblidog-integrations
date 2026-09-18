@@ -279,7 +279,8 @@ Documentation, test, CI, and ordinary chore commits do not create a release.
 On a qualifying push to `main`, Commitizen updates `pyproject.toml`, `uv.lock`,
 and `CHANGELOG.md` on a `release/vX.Y.Z` branch and creates (or reuses) a
 `bump: version X.Y.Z` PR. Merge that PR after CI approval. The finalizer then
-creates the annotated tag and GitHub Release and explicitly dispatches the
+creates the annotated tag and a draft GitHub Release containing the matching
+section from `CHANGELOG.md`. Review and publish that draft to start the
 multi-platform GHCR image publication.
 
 The first release is intentional and manual: run **Bootstrap initial release**
