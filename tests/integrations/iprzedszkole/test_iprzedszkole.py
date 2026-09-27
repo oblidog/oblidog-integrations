@@ -11,6 +11,9 @@ from oblidog_integrations.integrations.iprzedszkole.api import (
     parse_receivables,
     school_year_start,
 )
+from oblidog_integrations.integrations.iprzedszkole.category_data import (
+    receivables_data,
+)
 from oblidog_integrations.integrations.iprzedszkole.components import (
     sync_receivables_components,
 )
@@ -141,3 +144,114 @@ def test_sync_receivables_components_upserts_three_stable_components() -> None:
             },
         ),
     ]
+
+
+def test_missing_fees_do_not_overwrite_components_after_payment() -> None:
+    receivables = parse_receivables(
+        {
+            "d": {
+                "ListData": [
+                    {
+                        "Rok": 2026,
+                        "Miesiac": 9,
+                        "DoZaplaty": 0,
+                        "Zaplacono": "287,20",
+                        "Zaleglosc": 0,
+                        "Nadplata": 0,
+                    }
+                ]
+            }
+        },
+        {"d": {"ListK": [{"RodzajOplaty": 1, "Kwota": "0,00"}]}},
+        on=date(2026, 9, 27),
+    )
+    assert receivables.costs_fixed is None
+    assert receivables.costs_meal is None
+    assert receivables.costs_additional == Decimal("0.00")
+
+    calls: list[dict[str, object]] = []
+
+    class Obligations:
+        def upsert_component(
+            self, period: ObligationPeriod, **kwargs: object
+        ) -> object:
+            calls.append(kwargs)
+            return SimpleNamespace(result=MutationResult.UNCHANGED)
+
+    result = sync_receivables_components(
+        oblidog=SimpleNamespace(obligations=Obligations()),
+        receivables=receivables,
+        on=date(2026, 9, 27),
+    )
+    assert result.processed_count == 0
+    assert result.changed_count == 0
+    assert calls == []
+    assert receivables_data(receivables)["costs_fixed"] == 0
+
+
+def test_explicit_zero_fee_is_synced_before_payment_but_not_after() -> None:
+    calls: list[str] = []
+
+    class Obligations:
+        def upsert_component(
+            self, period: ObligationPeriod, **kwargs: object
+        ) -> object:
+            calls.append(str(kwargs["amount"]))
+            return SimpleNamespace(result=MutationResult.UNCHANGED)
+
+    unpaid = Receivables(
+        summary_to_pay=Decimal("10.00"),
+        summary_paid=Decimal(0),
+        summary_overdue=Decimal(0),
+        summary_overpayment=Decimal(0),
+        costs_fixed=Decimal("0.00"),
+        costs_meal=None,
+        costs_additional=None,
+    )
+    paid = Receivables(
+        summary_to_pay=Decimal(0),
+        summary_paid=Decimal("10.00"),
+        summary_overdue=Decimal(0),
+        summary_overpayment=Decimal(0),
+        costs_fixed=Decimal("0.00"),
+        costs_meal=None,
+        costs_additional=None,
+    )
+    oblidog = SimpleNamespace(obligations=Obligations())
+    assert (
+        sync_receivables_components(
+            oblidog=oblidog, receivables=unpaid, on=date(2026, 9, 27)
+        ).processed_count
+        == 1
+    )
+    assert (
+        sync_receivables_components(
+            oblidog=oblidog, receivables=paid, on=date(2026, 9, 27)
+        ).processed_count
+        == 0
+    )
+    assert calls == ["0.00"]
+
+
+def test_empty_fee_list_does_not_call_component_upsert() -> None:
+    class Obligations:
+        def upsert_component(
+            self, period: ObligationPeriod, **kwargs: object
+        ) -> object:
+            raise AssertionError("missing fees must not be synchronized")
+
+    result = sync_receivables_components(
+        oblidog=SimpleNamespace(obligations=Obligations()),
+        receivables=Receivables(
+            summary_to_pay=Decimal(0),
+            summary_paid=Decimal(0),
+            summary_overdue=Decimal(0),
+            summary_overpayment=Decimal(0),
+            costs_fixed=None,
+            costs_meal=None,
+            costs_additional=None,
+        ),
+        on=date(2026, 9, 27),
+    )
+    assert result.processed_count == 0
+    assert result.changed_count == 0

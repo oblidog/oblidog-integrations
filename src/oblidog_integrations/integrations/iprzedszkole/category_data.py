@@ -15,7 +15,9 @@ from oblidog_integrations.integrations.iprzedszkole.models import Receivables
 def receivables_data(receivables: Receivables) -> dict[str, float]:
     """Return a flat, JSON-compatible receivables snapshot."""
     return {
-        name: float(value.quantize(Decimal("0.01")))
+        name: float(
+            (value if value is not None else Decimal(0)).quantize(Decimal("0.01"))
+        )
         for name, value in vars(receivables).items()
     }
 
