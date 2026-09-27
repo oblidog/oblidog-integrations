@@ -82,7 +82,9 @@ kluczu:
 
 Każde uruchomienie wykonuje upsert tylko pozycji obecnych w odpowiedzi portalu. Stałe
 `external_id` sprawiają, że dana pozycja jest aktualizowana, a nie duplikowana.
-Pozycja z jawną kwotą `0.00` jest zapisywana jako zero. Brak pozycji nie zmienia
+Pozycja z jawną kwotą `0.00` jest zapisywana jako zero przed zaksięgowaniem
+wpłaty. Po wpłacie zero może oznaczać wyczyszczenie należności przez portal,
+więc nie nadpisuje wcześniejszej opłaty. Brak pozycji również nie zmienia
 istniejącego komponentu. Snapshot category-data zachowuje dotychczasowy schemat:
 nieobecna pozycja ma tam wartość `0`, która oznacza brak pozycji w bieżącej
 odpowiedzi, a nie kwotę historycznego komponentu.
