@@ -68,19 +68,19 @@ def parse_receivables(
                 periods, key=lambda period: (int(period["Rok"]), int(period["Miesiac"]))
             ),
         )
-        costs = {0: Decimal(0), 1: Decimal(0), 2: Decimal(0)}
+        costs: dict[int, Decimal] = {}
         for item in _as_list(details_payload, "d", "ListK"):
             kind = int(item["RodzajOplaty"])
-            if kind in costs:
+            if kind in (0, 1, 2):
                 costs[kind] = _amount(item["Kwota"])
         return Receivables(
             summary_to_pay=_amount(summary["DoZaplaty"]),
             summary_paid=_amount(summary["Zaplacono"]),
             summary_overdue=_amount(summary["Zaleglosc"]),
             summary_overpayment=_amount(summary["Nadplata"]),
-            costs_fixed=costs[0],
-            costs_additional=costs[1],
-            costs_meal=costs[2],
+            costs_fixed=costs.get(0),
+            costs_additional=costs.get(1),
+            costs_meal=costs.get(2),
         )
     except (KeyError, TypeError, ValueError, InvalidOperation) as error:
         raise IprzedszkoleError(

@@ -80,9 +80,12 @@ kluczu:
 | `2` | `monthly_fee` | Wyżywienie | `costs_meal` |
 | `1` | `monthly_fee` | Opłaty dodatkowe | `costs_additional` |
 
-Każde uruchomienie wykonuje upsert wszystkich trzech komponentów. Stałe
+Każde uruchomienie wykonuje upsert tylko pozycji obecnych w odpowiedzi portalu. Stałe
 `external_id` sprawiają, że dana pozycja jest aktualizowana, a nie duplikowana.
-Brak opłaty jest zapisywany jako `0.00`.
+Pozycja z jawną kwotą `0.00` jest zapisywana jako zero. Brak pozycji nie zmienia
+istniejącego komponentu. Snapshot category-data zachowuje dotychczasowy schemat:
+nieobecna pozycja ma tam wartość `0`, która oznacza brak pozycji w bieżącej
+odpowiedzi, a nie kwotę historycznego komponentu.
 
 ## Granice odpowiedzialności
 

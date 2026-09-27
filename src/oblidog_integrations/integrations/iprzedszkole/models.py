@@ -14,6 +14,6 @@ class Receivables:
     summary_paid: Decimal
     summary_overdue: Decimal
     summary_overpayment: Decimal
-    costs_fixed: Decimal
-    costs_meal: Decimal
-    costs_additional: Decimal
+    costs_fixed: Decimal | None
+    costs_meal: Decimal | None
+    costs_additional: Decimal | None

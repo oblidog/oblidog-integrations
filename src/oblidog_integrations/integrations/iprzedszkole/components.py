@@ -32,11 +32,15 @@ def sync_receivables_components(
     receivables: Receivables,
     on: date,
 ) -> ReceivablesComponentsSyncResult:
-    """Upsert the fixed, meal and additional fees for the current month."""
+    """Upsert only fees explicitly present in the portal's current response."""
     obligation_period = ObligationPeriod(on.year, on.month)
     changed_count = 0
+    processed_count = 0
     for field, label in _COMPONENTS:
         amount = getattr(receivables, field)
+        if amount is None:
+            continue
+        processed_count += 1
         result = oblidog.obligations.upsert_component(
             obligation_period,
             type="monthly_fee",
@@ -49,6 +53,6 @@ def sync_receivables_components(
             changed_count += 1
     return ReceivablesComponentsSyncResult(
         obligation_period=obligation_period,
-        processed_count=len(_COMPONENTS),
+        processed_count=processed_count,
         changed_count=changed_count,
     )
