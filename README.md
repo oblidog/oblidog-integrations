@@ -365,3 +365,16 @@ failures and code errors retain tracebacks by default. Set
 `OBLIDOG_LOG_TRACEBACKS=1` to include tracebacks for network failures as well.
 The scheduler still records the final exit status and duration, and nonzero exit
 codes are preserved. Locking and signal handling are unchanged.
+
+### Preparing releases
+
+Merge product changes into `main` and keep the automated `release/next` PR open.
+Each preparation rebuilds its version bump and changelog from current `main` and
+updates the same PR, including its title if the next version changes. Do not
+manually edit this automation-owned branch; updates use force-with-lease.
+Use the **Prepare release** manual action on `main` to refresh it on demand.
+After creating/updating the new PR, the workflow closes older bot-created
+`release/v*` PRs without deleting their branches. Human-created PRs are untouched.
+Merge `release/next` only when ready to release. Finalization reads the version
+and creates the tag from the exact release merge commit, then creates a draft
+GitHub Release. Publish the draft to trigger image publication.

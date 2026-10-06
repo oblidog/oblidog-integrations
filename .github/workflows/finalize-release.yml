@@ -13,20 +13,24 @@ jobs:
     if: >-
       github.event.pull_request.merged == true &&
       github.event.pull_request.head.repo.full_name == github.repository &&
-      startsWith(github.event.pull_request.head.ref, 'release/v')
+      (github.event.pull_request.head.ref == 'release/next' ||
+       startsWith(github.event.pull_request.head.ref, 'release/v'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: main
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
           fetch-depth: 0
       - name: Resolve version
         id: version
         env:
           RELEASE_BRANCH: ${{ github.event.pull_request.head.ref }}
         run: |
-          version="${RELEASE_BRANCH#release/v}"
-          [[ "$version" != "$RELEASE_BRANCH" && -n "$version" ]]
+          version="$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+          [[ -n "$version" ]]
+          if [[ "$RELEASE_BRANCH" != "release/next" ]]; then
+            [[ "$version" == "${RELEASE_BRANCH#release/v}" ]]
+          fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: Create annotated tag
         env:
