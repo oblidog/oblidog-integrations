@@ -1,6 +1,7 @@
 name: Prepare release
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
 
@@ -19,6 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: main
           fetch-depth: 0
       - uses: actions/setup-python@v7
         with:
@@ -53,37 +55,43 @@ jobs:
           if [[ $status -ne 0 ]]; then exit "$status"; fi
           echo "should_release=true" >> "$GITHUB_OUTPUT"
           echo "version=$next_version" >> "$GITHUB_OUTPUT"
-      - name: Check release branch
+      - name: Refresh release branch from main
         if: steps.version.outputs.should_release == 'true'
-        id: branch
         env:
-          RELEASE_BRANCH: release/v${{ steps.version.outputs.version }}
-        run: |
-          if git ls-remote --exit-code --heads origin "$RELEASE_BRANCH" >/dev/null 2>&1; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Prepare and push release branch
-        if: steps.version.outputs.should_release == 'true' && steps.branch.outputs.exists == 'false'
-        env:
-          RELEASE_BRANCH: release/v${{ steps.version.outputs.version }}
+          RELEASE_BRANCH: release/next
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          uv run cz bump --yes --check-consistency
-          git tag -d "v${{ steps.version.outputs.version }}"
-          git push origin HEAD:"refs/heads/${RELEASE_BRANCH}"
-      - name: Ensure release pull request
+          expected_sha="$(git ls-remote --heads origin "refs/heads/$RELEASE_BRANCH" | awk '{print $1}')"
+          uv run --frozen cz bump --yes --check-consistency
+          git tag -d "v$RELEASE_VERSION"
+          git push --force-with-lease="refs/heads/$RELEASE_BRANCH:$expected_sha" \
+            origin HEAD:"refs/heads/$RELEASE_BRANCH"
+      - name: Create or update the release pull request
         if: steps.version.outputs.should_release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_BRANCH: release/v${{ steps.version.outputs.version }}
+          RELEASE_BRANCH: release/next
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
         run: |
-          if gh pr list --base main --head "$RELEASE_BRANCH" --state open --json url --jq '.[0].url' | grep -q .; then
-            exit 0
+          title="ci: prepare release v$RELEASE_VERSION"
+          body="Automated release preparation for v$RELEASE_VERSION, regenerated from current main. Keep this PR open while merging other changes. Merge when ready to release; then publish the generated draft GitHub Release to publish the GHCR image."
+          pr="$(gh pr list --base main --head "$RELEASE_BRANCH" --state open --json number --jq '.[0].number // empty')"
+          if [[ -n "$pr" ]]; then
+            gh pr edit "$pr" --title "$title" --body "$body"
+          else
+            gh pr create --base main --head "$RELEASE_BRANCH" --title "$title" --body "$body"
           fi
-          gh pr create --base main --head "$RELEASE_BRANCH" \
-            --title "bump: version $RELEASE_VERSION" \
-            --body "Automated release preparation for v$RELEASE_VERSION. Merge after checks pass. The workflow will create a draft GitHub Release from CHANGELOG.md; publish that draft to build and publish the GHCR image."
+      - name: Close superseded automated release pull requests
+        if: steps.version.outputs.should_release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh pr list --base main --state open --limit 100 \
+            --json number,headRefName,author \
+            --jq '.[] | select(.author.login == "app/github-actions" or .author.login == "github-actions[bot]") | select(.headRefName | startswith("release/v")) | .number' \
+            | while read -r pr; do gh pr close "$pr"; done
