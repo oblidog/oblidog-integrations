@@ -54,7 +54,7 @@ def school_year_start(on: date) -> int:
 
 def parse_receivables(
     annual_payload: object, details_payload: object, *, on: date
-) -> Receivables:
+) -> Receivables | None:
     """Parse the two ASP.NET AJAX responses into a validated fee snapshot."""
     try:
         periods = _as_list(annual_payload, "d", "ListData")
@@ -64,10 +64,10 @@ def parse_receivables(
                 for period in periods
                 if int(period["Rok"]) == on.year and int(period["Miesiac"]) == on.month
             ),
-            max(
-                periods, key=lambda period: (int(period["Rok"]), int(period["Miesiac"]))
-            ),
+            None,
         )
+        if summary is None:
+            return None
         costs: dict[int, Decimal] = {}
         for item in _as_list(details_payload, "d", "ListK"):
             kind = int(item["RodzajOplaty"])
@@ -121,7 +121,7 @@ class IprzedszkoleClient:
         self._opener: Any | None = None
         self._child_master_id: str | None = None
 
-    def fetch_receivables(self, *, on: date) -> Receivables:
+    def fetch_receivables(self, *, on: date) -> Receivables | None:
         """Authenticate and return the current portal receivables."""
         self._authenticate()
         self._get(URL_RECEIVABLES)
