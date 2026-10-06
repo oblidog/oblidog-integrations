@@ -40,10 +40,10 @@ def test_extract_release_notes_does_not_confuse_prerelease_prefix() -> None:
 
 
 def test_extract_release_notes_rejects_missing_version() -> None:
-    with pytest.raises(ValueError, match="No changelog section found for v9.9.9"):
+    with pytest.raises(ValueError, match=r"No changelog section found for v9\.9\.9"):
         extract_release_notes(CHANGELOG, "v9.9.9")
 
 
 def test_extract_release_notes_rejects_empty_section() -> None:
-    with pytest.raises(ValueError, match="Changelog section for v1.0.0 is empty"):
+    with pytest.raises(ValueError, match=r"Changelog section for v1\.0\.0 is empty"):
         extract_release_notes("## v1.0.0 (2026-09-20)\n", "v1.0.0")

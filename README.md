@@ -318,3 +318,17 @@ to populate pending obligations after upgrading.
 If the annual report has no record for the current month, iPrzedszkole finishes
 successfully without writing snapshots, components or obligations. Previous-month
 balances are never reused for the current month.
+
+### Development checks
+
+Run `uv sync --locked` and `make check` before opening a pull request. The same
+checks run in CI: Ruff lint, Ruff formatting, `ty check --error-on-warning`, and
+pytest. Individual targets are `make lint`, `make format-check`, `make typecheck`,
+and `make test`; `make format` applies formatting.
+
+Ruff enforces import sorting, modern Python syntax, bugbear checks, comprehension
+and simplification rules, Ruff-specific diagnostics and explicit suppression
+codes, alongside its default error checks. En dashes are allowed for real portal
+text in fixtures. ty checks production code (`src`) and maintenance scripts
+(`scripts`) against Python 3.12; test doubles are covered by lint and pytest.
+Both tools are development dependencies pinned through `uv.lock`.

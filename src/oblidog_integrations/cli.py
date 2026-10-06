@@ -32,7 +32,7 @@ def main() -> None:
     args = build_parser().parse_args()
     try:
         run_with_reporting(args.integration, INTEGRATIONS[args.integration])
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         # The reporter already emits provider tracebacks inside the run context.
         # Exit explicitly so Python does not print a second, unredacted traceback.
         logger.error(
