@@ -16,6 +16,7 @@ from urllib.request import HTTPCookieProcessor, Request, build_opener
 from bs4 import BeautifulSoup
 
 from oblidog_integrations.integrations.nju.models import NjuAccountSummary, NjuInvoice
+from oblidog_integrations.retry import TransientProviderError, retry_provider
 
 LOGIN_URL = "https://www.njumobile.pl/logowanie?backUrl=/mojekonto/faktury"
 POST_URL = "https://www.njumobile.pl/logowanie?_DARGS=/profile-processes/login/login.jsp.portal-login-form"
@@ -28,6 +29,10 @@ USER_AGENT = (
 
 class NjuError(RuntimeError):
     """Raised when NJU Mobile cannot authenticate or provide invoice data."""
+
+
+class NjuSessionTokenError(NjuError, TransientProviderError):
+    """The login page is incomplete; retry with a fresh cookie session."""
 
 
 class NjuClient:
@@ -50,7 +55,11 @@ class NjuClient:
 
     def fetch_invoices(self) -> list[NjuInvoice]:
         """Authenticate and return all invoices visible in the portal."""
-        page = self._login_page()
+        self.account_summary = None
+        self.account_summary_error = None
+        page = retry_provider(
+            self._login_page, integration="nju", operation_name="login_session"
+        )
         try:
             self.account_summary = parse_account_summary(page)
         except NjuError as error:
@@ -66,7 +75,9 @@ class NjuClient:
             "input", attrs={"name": "_dynSessConf"}
         )
         if session_token is None or not session_token.get("value"):
-            raise NjuError("NJU Mobile login page did not provide a session token")
+            raise NjuSessionTokenError(
+                "NJU Mobile login page did not provide a session token"
+            )
 
         payload = {
             "_dyncharset": "UTF-8",

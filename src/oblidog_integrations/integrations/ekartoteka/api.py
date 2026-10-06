@@ -23,6 +23,7 @@ from oblidog_integrations.integrations.ekartoteka.models import (
     TokenResponse,
     UpdateDatesPage,
 )
+from oblidog_integrations.retry import retry_provider
 
 
 class EkartotekaError(RuntimeError):
@@ -62,6 +63,15 @@ class EkartotekaApi:
         self.client_id: int | None = None
 
     def _request_json(self, url: str, *, payload: dict[str, str] | None = None) -> Any:
+        return retry_provider(
+            lambda: self._request_json_once(url, payload=payload),
+            integration="ekartoteka",
+            operation_name="login" if url == self.URL_TOKEN else "fetch_json",
+        )
+
+    def _request_json_once(
+        self, url: str, *, payload: dict[str, str] | None = None
+    ) -> Any:
         headers = {"Accept": "application/json"}
         data = None
         if payload is not None:

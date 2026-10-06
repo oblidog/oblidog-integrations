@@ -302,3 +302,18 @@ docker run --rm \
   --env-file demo.env \
   oblidog-integrations:local demo
 ```
+
+### Provider retries
+
+Transient provider failures receive at most three attempts with exponential
+backoff (2 and 4 seconds plus 0–1 second of random jitter). e-Kartoteka retries
+individual JSON requests; NJU restarts login with a fresh cookie session after
+network errors or a missing session token. Timeouts, connection failures, DNS
+errors and HTTP 5xx are retryable. HTTP 4xx, rejected credentials, certificate
+errors and invalid provider data fail immediately. NJU invoice parsing and
+Oblidog writes are outside the retry boundary. The final failure still reaches
+the existing run reporting, and the daily scheduler continues other integrations.
+
+Each retry logs `request_retry` with integration, operation, next attempt,
+maximum attempts, error type and delay. Request bodies, credentials and URLs are
+not included. Existing 30-second request timeouts remain in effect.
