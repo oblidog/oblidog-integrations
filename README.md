@@ -313,3 +313,17 @@ Zero or negative balances do not clear historical amounts, and other lifecycle
 states are left unchanged. Obligation synchronization runs even when the category
 snapshot and components have not changed, allowing previously imported charges
 to populate pending obligations after upgrading.
+
+### Development checks
+
+Run `uv sync --locked` and `make check` before opening a pull request. The same
+checks run in CI: Ruff lint, Ruff formatting, `ty check --error-on-warning`, and
+pytest. Individual targets are `make lint`, `make format-check`, `make typecheck`,
+and `make test`; `make format` applies formatting.
+
+Ruff enforces import sorting, modern Python syntax, bugbear checks, comprehension
+and simplification rules, Ruff-specific diagnostics and explicit suppression
+codes, alongside its default error checks. En dashes are allowed for real portal
+text in fixtures. ty checks production code (`src`) and maintenance scripts
+(`scripts`) against Python 3.12; test doubles are covered by lint and pytest.
+Both tools are development dependencies pinned through `uv.lock`.

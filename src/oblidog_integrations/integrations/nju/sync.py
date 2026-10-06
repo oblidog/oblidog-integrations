@@ -279,7 +279,7 @@ def run() -> RunResult:
             obligation_period=obligation_period,
             invoices=invoices,
         )
-        total = sum((invoice.total_amount for invoice in invoices), start=0)
+        total = sum((invoice.total_amount for invoice in invoices), start=Decimal(0))
         issue_date = min(invoice.issue_date for invoice in invoices)
         due_date = min(invoice.due_date for invoice in invoices)
         paid = all(invoice.is_paid for invoice in invoices)
