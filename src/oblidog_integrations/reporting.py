@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -32,9 +33,11 @@ def run_with_reporting(integration: str, runner: IntegrationRunner) -> RunResult
             if not isinstance(result, RunResult):
                 raise TypeError("Integration runner must return RunResult")
         except Exception as error:
-            logger.exception(
+            logger.error(
                 "integration_run_failed",
                 error_type=type(error).__name__,
+                error=str(error),
+                exc_info=os.getenv("OBLIDOG_LOG_TRACEBACKS", "0") == "1",
             )
             raise
         logger.info(

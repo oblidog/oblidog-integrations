@@ -316,7 +316,12 @@ def test_unavailable_current_period_finishes_without_any_ledger_writes(monkeypat
         "IPRZEDSZKOLE_PASSWORD",
     ]:
         monkeypatch.setenv(key, "test")
+    logger = Mock()
+    monkeypatch.setattr(sync, "logger", logger)
     result = sync.run()
+    logger.info.assert_any_call(
+        "integration_run_started", integration="iprzedszkole", category_code="PRSQ"
+    )
     assert result.changes_detected is False
     run.finish_success.assert_called_once_with(changes_detected=False)
     assert ledger.obligations.mock_calls == []

@@ -72,6 +72,11 @@ def run() -> RunResult:
         ) as client,
         client.integrations.run() as run,
     ):
+        logger.info(
+            "integration_run_started",
+            integration="ekartoteka",
+            category_code=run.context.category.code,
+        )
         category_code = run.context.category.code
         snapshot_export = export_snapshot(
             ekartoteka=ekartoteka_client,

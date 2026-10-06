@@ -14,6 +14,7 @@ dependencies = [
 ]
 
 [project.scripts]
+oblidog-scheduler-log = "oblidog_integrations.scheduler_logging:main"
 oblidog-integrations = "oblidog_integrations.cli:main"
 
 [dependency-groups]

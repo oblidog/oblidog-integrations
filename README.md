@@ -332,3 +332,17 @@ codes, alongside its default error checks. En dashes are allowed for real portal
 text in fixtures. ty checks production code (`src`) and maintenance scripts
 (`scripts`) against Python 3.12; test doubles are covered by lint and pytest.
 Both tools are development dependencies pinned through `uv.lock`.
+
+### Run logging
+
+Scheduler events use the same structlog configuration as integrations, including
+`OBLIDOG_LOG_FORMAT=console` (default) or `json`. Timestamps are UTC throughout,
+while business dates continue to use the integration's business timezone.
+`integration_run_started` confirms that entering the Ledger SDK run succeeded
+and its category context is available; scheduler start only confirms the process
+was launched. Providers may authenticate before the Ledger run begins.
+
+Failures produce one `integration_run_failed` event with the error type and
+redacted message. Full tracebacks are opt-in with `OBLIDOG_LOG_TRACEBACKS=1`.
+The scheduler still records the final exit status and duration, and nonzero exit
+codes are preserved. Locking and signal handling are unchanged.
