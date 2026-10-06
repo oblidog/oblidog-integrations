@@ -36,7 +36,7 @@ def is_transient(error: Exception) -> bool:
         ),
     ):
         return True
-    return error.__cause__ is not None and is_transient(error.__cause__)
+    return isinstance(error.__cause__, Exception) and is_transient(error.__cause__)
 
 
 def retry_provider[T](

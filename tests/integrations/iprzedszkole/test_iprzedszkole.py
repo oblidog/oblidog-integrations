@@ -255,3 +255,69 @@ def test_empty_fee_list_does_not_call_component_upsert() -> None:
     )
     assert result.processed_count == 0
     assert result.changed_count == 0
+
+
+def test_missing_current_period_does_not_use_previous_balance():
+    assert (
+        parse_receivables(
+            {
+                "d": {
+                    "ListData": [
+                        {
+                            "Rok": 2026,
+                            "Miesiac": 9,
+                            "DoZaplaty": "287.20",
+                            "Zaplacono": 0,
+                            "Zaleglosc": "287.20",
+                            "Nadplata": 0,
+                        }
+                    ]
+                }
+            },
+            {"d": {"ListK": [{"RodzajOplaty": 2, "Kwota": "287.20"}]}},
+            on=date(2026, 10, 1),
+        )
+        is None
+    )
+
+
+def test_empty_annual_report_is_unavailable():
+    assert (
+        parse_receivables(
+            {"d": {"ListData": []}}, {"d": {"ListK": []}}, on=date(2026, 10, 1)
+        )
+        is None
+    )
+
+
+def test_unavailable_current_period_finishes_without_any_ledger_writes(monkeypatch):
+    from contextlib import nullcontext
+    from unittest.mock import MagicMock, Mock
+
+    from oblidog_integrations.integrations.iprzedszkole import sync
+
+    run = SimpleNamespace(
+        context=SimpleNamespace(category=SimpleNamespace(code="PRSQ")),
+        finish_success=Mock(),
+    )
+    ledger = Mock()
+    ledger.integrations.run.return_value = nullcontext(run)
+    ledger_context = MagicMock()
+    ledger_context.__enter__.return_value = ledger
+    monkeypatch.setattr(sync, "OblidogClient", Mock(return_value=ledger_context))
+    provider = Mock()
+    provider.fetch_receivables.return_value = None
+    monkeypatch.setattr(sync, "IprzedszkoleClient", Mock(return_value=provider))
+    for key in [
+        "OBLIDOG_URL",
+        "OBLIDOG_API_KEY",
+        "IPRZEDSZKOLE_KINDERGARTEN",
+        "IPRZEDSZKOLE_LOGIN",
+        "IPRZEDSZKOLE_PASSWORD",
+    ]:
+        monkeypatch.setenv(key, "test")
+    result = sync.run()
+    assert result.changes_detected is False
+    run.finish_success.assert_called_once_with(changes_detected=False)
+    assert ledger.obligations.mock_calls == []
+    assert ledger.category_data.mock_calls == []

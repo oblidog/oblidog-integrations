@@ -317,3 +317,33 @@ the existing run reporting, and the daily scheduler continues other integrations
 Each retry logs `request_retry` with integration, operation, next attempt,
 maximum attempts, error type and delay. Request bodies, credentials and URLs are
 not included. Existing 30-second request timeouts remain in effect.
+
+### iPrzedszkole obligation updates
+
+A positive monthly `summary_to_pay` populates `current_amount` for obligations in
+`draft` or `collecting_data`, then marks them `ready`. The issue date is the local
+Warsaw detection date capped at the due date for late runs, as a fallback when
+the provider does not expose a publication date. The due date is the month's tenth, moved
+back to the previous working day across weekends and Polish public holidays.
+Zero or negative balances do not clear historical amounts, and other lifecycle
+states are left unchanged. Obligation synchronization runs even when the category
+snapshot and components have not changed, allowing previously imported charges
+to populate pending obligations after upgrading.
+
+If the annual report has no record for the current month, iPrzedszkole finishes
+successfully without writing snapshots, components or obligations. Previous-month
+balances are never reused for the current month.
+
+### Development checks
+
+Run `uv sync --locked` and `make check` before opening a pull request. The same
+checks run in CI: Ruff lint, Ruff formatting, `ty check --error-on-warning`, and
+pytest. Individual targets are `make lint`, `make format-check`, `make typecheck`,
+and `make test`; `make format` applies formatting.
+
+Ruff enforces import sorting, modern Python syntax, bugbear checks, comprehension
+and simplification rules, Ruff-specific diagnostics and explicit suppression
+codes, alongside its default error checks. En dashes are allowed for real portal
+text in fixtures. ty checks production code (`src`) and maintenance scripts
+(`scripts`) against Python 3.12; test doubles are covered by lint and pytest.
+Both tools are development dependencies pinned through `uv.lock`.

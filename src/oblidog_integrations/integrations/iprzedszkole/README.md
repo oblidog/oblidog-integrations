@@ -44,8 +44,9 @@ lista opłat ──────────────────────�
 
 Integracja używa bieżącej daty w strefie `Europe/Warsaw`. Raport roczny jest
 pobierany dla roku szkolnego, który zaczyna się we wrześniu. Z raportu wybierany
-jest wpis dla bieżącego miesiąca kalendarzowego; gdy portal go jeszcze nie
-opublikował, używany jest najnowszy dostępny wpis.
+jest wyłącznie wpis dla bieżącego miesiąca kalendarzowego. Gdy portal go jeszcze
+nie opublikował albo raport jest pusty, run kończy się sukcesem bez zmian. Nie
+zapisuje snapshotu, komponentów ani kwoty z innego okresu.
 
 ### Snapshot kategorii
 
@@ -91,9 +92,16 @@ odpowiedzi, a nie kwotę historycznego komponentu.
 
 ## Granice odpowiedzialności
 
-Integracja nie tworzy obligation i nie zmienia jego `current_amount`, dat ani
-lifecycle (`ready`, `paid`). Obligation musi istnieć w Ledger przed pierwszym
-uruchomieniem integracji.
+Integracja nie tworzy obligation; musi ono istnieć w Ledger przed pierwszym
+uruchomieniem. Dodatnie `summary_to_pay` aktualizuje kwotę obligation w stanie
+`draft` lub `collecting_data`, a następnie oznacza je jako `ready`. Pozostałe
+stany i historyczne kwoty przy niedodatnim saldzie pozostają bez zmian.
+
+Termin płatności to 10. dzień miesiąca cofnięty do poprzedniego dnia roboczego
+według polskiego kalendarza świąt. Portal nie podaje daty wystawienia: używany
+jest dzień wykrycia, a przy późnym wykryciu termin płatności jako data zastępcza.
+Dzięki temu data wystawienia nie przekracza terminu, a termin nie jest przesuwany
+i zaległość nadal jest widoczna.
 
 `summary_to_pay` jest saldem widocznym w portalu i może obejmować zaległości,
 nadpłaty albo korekty. Nie musi więc być równy sumie trzech komponentów opłat;

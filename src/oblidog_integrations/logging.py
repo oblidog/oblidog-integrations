@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import MutableMapping
 from typing import Any
 
 import structlog
@@ -19,7 +20,7 @@ _SECRET_MARKERS = (
 
 
 def _redact_secrets(
-    _logger: Any, _method_name: str, event_dict: dict[str, Any]
+    _logger: Any, _method_name: str, event_dict: MutableMapping[str, Any]
 ) -> dict[str, Any]:
     """Remove configured secrets from rendered events and tracebacks."""
     secrets = {

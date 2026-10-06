@@ -16,6 +16,9 @@ from oblidog_integrations.integrations.iprzedszkole.category_data import (
 from oblidog_integrations.integrations.iprzedszkole.components import (
     sync_receivables_components,
 )
+from oblidog_integrations.integrations.iprzedszkole.obligations import (
+    sync_receivables_obligation,
+)
 from oblidog_integrations.reporting import RunResult
 
 logger = structlog.get_logger(__name__)
@@ -44,6 +47,16 @@ def run() -> RunResult:
             login=_required_env("IPRZEDSZKOLE_LOGIN"),
             password=_required_env("IPRZEDSZKOLE_PASSWORD"),
         ).fetch_receivables(on=now.date())
+        if receivables is None:
+            logger.info(
+                "iprzedszkole_receivables_unavailable",
+                account=account_name,
+                category_code=category_code,
+                obligation_period=now.strftime("%Y-%m"),
+                reason="current_period_unavailable",
+            )
+            run.finish_success(changes_detected=False)
+            return RunResult(changes_detected=False)
         created = export_receivables(
             receivables=receivables,
             oblidog=oblidog,
@@ -53,8 +66,13 @@ def run() -> RunResult:
             receivables=receivables,
             on=now.date(),
         )
+        obligation_updated = sync_receivables_obligation(
+            oblidog=oblidog, receivables=receivables, on=now.date()
+        )
         result = RunResult(
-            changes_detected=created or bool(components_sync.changed_count)
+            changes_detected=created
+            or bool(components_sync.changed_count)
+            or obligation_updated
         )
         run.finish_success(changes_detected=result.changes_detected)
     logger.info(

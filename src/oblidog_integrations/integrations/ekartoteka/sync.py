@@ -130,6 +130,8 @@ def run() -> RunResult:
         )
     for obligation_data_sync in obligation_data_syncs:
         if obligation_data_sync.updated:
+            assert obligation_data_sync.issue_date is not None
+            assert obligation_data_sync.due_date is not None
             logger.info(
                 "obligation_populated_and_ready",
                 obligation_key=obligation_data_sync.obligation_key,
@@ -138,6 +140,7 @@ def run() -> RunResult:
                 due_date=obligation_data_sync.due_date.isoformat(),
             )
         elif obligation_data_sync.fee_period_available:
+            assert obligation_data_sync.lifecycle is not None
             logger.info(
                 "obligation_data_not_updated",
                 obligation_key=obligation_data_sync.obligation_key,
@@ -158,6 +161,7 @@ def run() -> RunResult:
             reason="fee_period_unavailable",
         )
     else:
+        assert obligation_check.lifecycle is not None
         logger.info(
             "obligation_error_not_marked",
             obligation_key=obligation_check.obligation_key,
