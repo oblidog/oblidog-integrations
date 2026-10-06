@@ -41,6 +41,11 @@ def run() -> RunResult:
         ) as oblidog,
         oblidog.integrations.run() as run,
     ):
+        logger.info(
+            "integration_run_started",
+            integration="iprzedszkole",
+            category_code=run.context.category.code,
+        )
         category_code = run.context.category.code
         receivables = IprzedszkoleClient(
             kindergarten=_required_env("IPRZEDSZKOLE_KINDERGARTEN"),

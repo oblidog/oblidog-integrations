@@ -3,10 +3,13 @@ from __future__ import annotations
 import datetime
 import os
 
+import structlog
 from oblidog_client import OblidogClient, ObligationPeriod
 
 from oblidog_integrations.integrations.demo.provider import fetch
 from oblidog_integrations.reporting import RunResult
+
+logger = structlog.get_logger(__name__)
 
 
 def _required_env(name: str) -> str:
@@ -27,6 +30,11 @@ def run() -> RunResult:
         ) as client,
         client.integrations.run() as run,
     ):
+        logger.info(
+            "integration_run_started",
+            integration="demo",
+            category_code=run.context.category.code,
+        )
         obligations = client.obligations.list(
             year=now.year,
             month=now.month,

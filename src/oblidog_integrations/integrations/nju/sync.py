@@ -212,6 +212,11 @@ def run() -> RunResult:
         ) as oblidog,
         oblidog.integrations.run() as run,
     ):
+        logger.info(
+            "integration_run_started",
+            integration="nju",
+            category_code=run.context.category.code,
+        )
         category_code = run.context.category.code
         if summary := getattr(nju, "account_summary", None):
             summary_export = export_account_summary(

@@ -32,15 +32,8 @@ def main() -> None:
     args = build_parser().parse_args()
     try:
         run_with_reporting(args.integration, INTEGRATIONS[args.integration])
-    except Exception as error:
-        # The reporter already emits provider tracebacks inside the run context.
-        # Exit explicitly so Python does not print a second, unredacted traceback.
-        logger.error(
-            "integration_command_failed",
-            integration=args.integration,
-            error_type=type(error).__name__,
-            error=str(error),
-        )
+    except Exception:
+        # run_with_reporting already logged the failure once.
         raise SystemExit(1) from None
 
 
