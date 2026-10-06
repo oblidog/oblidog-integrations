@@ -1,4 +1,5 @@
 from contextlib import nullcontext
+from http.client import IncompleteRead
 from io import BytesIO
 from ssl import SSLCertVerificationError
 from unittest.mock import Mock
@@ -23,6 +24,7 @@ def waits(monkeypatch):
     "error",
     [
         TimeoutError(),
+        IncompleteRead(b"partial", 100),
         ConnectionResetError(),
         URLError(TimeoutError()),
         HTTPError("https://provider", 503, "unavailable", {}, None),
@@ -141,6 +143,8 @@ def test_retry_log_has_attempt_delay_and_no_error_payload(monkeypatch, waits):
         attempt=2,
         max_attempts=3,
         reason="TimeoutError",
+        source_error_type="TimeoutError",
+        http_status=None,
         delay_seconds=2.5,
     )
 
@@ -156,3 +160,52 @@ def test_nju_network_failure_restarts_session_and_exhausts_budget(waits):
     assert factory.call_count == 3
     assert opener.open.call_count == 3
     assert waits.call_count == 2
+
+
+@pytest.mark.parametrize("code", [500, 503])
+def test_wrapped_http_retry_logs_source_type_and_status(monkeypatch, waits, code):
+    logger = Mock()
+    monkeypatch.setattr(retry, "logger", logger)
+    source = HTTPError(
+        "https://provider.invalid?token=secret", code, "secret", {}, None
+    )
+    error = NjuError("request failed: secret")
+    error.__cause__ = source
+    operation = Mock(side_effect=[error, "ok"])
+    assert (
+        retry.retry_provider(
+            operation, integration="nju", operation_name="login_session"
+        )
+        == "ok"
+    )
+    fields = logger.warning.call_args.kwargs
+    assert fields["reason"] == "NjuError"
+    assert fields["source_error_type"] == "HTTPError"
+    assert fields["http_status"] == code
+    assert "secret" not in str(logger.warning.call_args)
+
+
+def test_wrapped_urlerror_logs_original_timeout(monkeypatch, waits):
+    logger = Mock()
+    monkeypatch.setattr(retry, "logger", logger)
+    error = NjuError("request failed")
+    error.__cause__ = URLError(TimeoutError("secret"))
+    retry.retry_provider(
+        Mock(side_effect=[error, "ok"]),
+        integration="nju",
+        operation_name="login_session",
+    )
+    assert logger.warning.call_args.kwargs["source_error_type"] == "TimeoutError"
+    assert logger.warning.call_args.kwargs["http_status"] is None
+
+
+def test_ekartoteka_retries_interrupted_response_body(monkeypatch, waits):
+    response = Mock()
+    response.read.side_effect = IncompleteRead(b"partial", 100)
+    request = Mock(
+        side_effect=[nullcontext(response), nullcontext(BytesIO(b'{"ok": true}'))]
+    )
+    monkeypatch.setattr(ek_api, "urlopen", request)
+    assert ek_api.EkartotekaApi({})._request_json("https://provider") == {"ok": True}
+    assert request.call_count == 2
+    waits.assert_called_once()

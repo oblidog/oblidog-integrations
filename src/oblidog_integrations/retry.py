@@ -5,7 +5,7 @@ import socket
 import ssl
 import time
 from collections.abc import Callable
-from http.client import RemoteDisconnected
+from http.client import IncompleteRead, RemoteDisconnected
 from urllib.error import HTTPError, URLError
 
 import structlog
@@ -31,12 +31,29 @@ def is_transient(error: Exception) -> bool:
             TimeoutError,
             ConnectionError,
             RemoteDisconnected,
+            IncompleteRead,
             socket.gaierror,
             TransientProviderError,
         ),
     ):
         return True
     return isinstance(error.__cause__, Exception) and is_transient(error.__cause__)
+
+
+def _source_error(error: Exception) -> Exception:
+    """Unwrap transport errors without logging their potentially sensitive text."""
+    seen: set[int] = set()
+    while id(error) not in seen:
+        seen.add(id(error))
+        if isinstance(error, HTTPError):
+            return error
+        if isinstance(error, URLError) and isinstance(error.reason, Exception):
+            error = error.reason
+        elif isinstance(error.__cause__, Exception):
+            error = error.__cause__
+        else:
+            break
+    return error
 
 
 def retry_provider[T](
@@ -54,6 +71,7 @@ def retry_provider[T](
             if attempt == 3 or not is_transient(error):
                 raise
             delay = 2**attempt + random.uniform(0, 1)
+            source = _source_error(error)
             logger.warning(
                 "request_retry",
                 integration=integration,
@@ -61,6 +79,8 @@ def retry_provider[T](
                 attempt=attempt + 1,
                 max_attempts=3,
                 reason=type(error).__name__,
+                source_error_type=type(source).__name__,
+                http_status=source.code if isinstance(source, HTTPError) else None,
                 delay_seconds=round(delay, 3),
             )
             time.sleep(delay)
