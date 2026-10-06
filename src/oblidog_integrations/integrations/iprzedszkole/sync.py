@@ -47,6 +47,16 @@ def run() -> RunResult:
             login=_required_env("IPRZEDSZKOLE_LOGIN"),
             password=_required_env("IPRZEDSZKOLE_PASSWORD"),
         ).fetch_receivables(on=now.date())
+        if receivables is None:
+            logger.info(
+                "iprzedszkole_receivables_unavailable",
+                account=account_name,
+                category_code=category_code,
+                obligation_period=now.strftime("%Y-%m"),
+                reason="current_period_unavailable",
+            )
+            run.finish_success(changes_detected=False)
+            return RunResult(changes_detected=False)
         created = export_receivables(
             receivables=receivables,
             oblidog=oblidog,

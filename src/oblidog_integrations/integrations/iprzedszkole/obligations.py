@@ -26,8 +26,9 @@ def sync_receivables_obligation(
     """Set a positive balance and mark draft/collecting obligations ready.
 
     Zero balances never erase historical amounts. Ready and terminal obligations
-    are left untouched. The issue date is the day this run detects the charge;
-    the provider does not expose its publication date.
+    are left untouched. The provider does not expose its publication date:
+    use the detection date, capped at the due date for late runs, so Ledger's
+    issue_date <= due_date invariant holds without moving the payment deadline.
     """
     if receivables.summary_to_pay <= 0:
         return False
@@ -39,10 +40,11 @@ def sync_receivables_obligation(
     }:
         return False
     due_date = payment_due_date(on)
+    issue_date = min(on, due_date)
     oblidog.obligations.update(
         period,
         current_amount=str(receivables.summary_to_pay),
-        issue_date=on,
+        issue_date=issue_date,
         due_date=due_date,
     )
     oblidog.obligations.mark_ready(period)
@@ -52,7 +54,7 @@ def sync_receivables_obligation(
         previous_lifecycle=obligation.lifecycle.value,
         lifecycle=ObligationLifecycle.READY.value,
         current_amount=str(receivables.summary_to_pay),
-        issue_date=on.isoformat(),
+        issue_date=issue_date.isoformat(),
         due_date=due_date.isoformat(),
     )
     return True

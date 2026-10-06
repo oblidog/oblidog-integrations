@@ -109,3 +109,22 @@ def test_update_failure_does_not_mark_ready():
             on=date(2026, 10, 3),
         )
     api.mark_ready.assert_not_called()
+
+
+def test_late_detection_keeps_deadline_and_uses_valid_issue_date():
+    api = Mock()
+    api.get.return_value = SimpleNamespace(
+        key="PRSQ-2026-10", lifecycle=ObligationLifecycle.DRAFT
+    )
+    assert sync_receivables_obligation(
+        oblidog=SimpleNamespace(obligations=api),
+        receivables=receivables("260.00"),
+        on=date(2026, 10, 12),
+    )
+    api.update.assert_called_once_with(
+        ObligationPeriod(2026, 10),
+        current_amount="260.00",
+        issue_date=date(2026, 10, 9),
+        due_date=date(2026, 10, 9),
+    )
+    api.mark_ready.assert_called_once_with(ObligationPeriod(2026, 10))

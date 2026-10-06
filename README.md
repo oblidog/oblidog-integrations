@@ -307,12 +307,17 @@ docker run --rm \
 
 A positive monthly `summary_to_pay` populates `current_amount` for obligations in
 `draft` or `collecting_data`, then marks them `ready`. The issue date is the local
-Warsaw date when the charge is detected. The due date is the month's tenth, moved
+Warsaw detection date capped at the due date for late runs, as a fallback when
+the provider does not expose a publication date. The due date is the month's tenth, moved
 back to the previous working day across weekends and Polish public holidays.
 Zero or negative balances do not clear historical amounts, and other lifecycle
 states are left unchanged. Obligation synchronization runs even when the category
 snapshot and components have not changed, allowing previously imported charges
 to populate pending obligations after upgrading.
+
+If the annual report has no record for the current month, iPrzedszkole finishes
+successfully without writing snapshots, components or obligations. Previous-month
+balances are never reused for the current month.
 
 ### Development checks
 
