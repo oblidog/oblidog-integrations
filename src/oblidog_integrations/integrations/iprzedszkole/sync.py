@@ -16,6 +16,9 @@ from oblidog_integrations.integrations.iprzedszkole.category_data import (
 from oblidog_integrations.integrations.iprzedszkole.components import (
     sync_receivables_components,
 )
+from oblidog_integrations.integrations.iprzedszkole.obligations import (
+    sync_receivables_obligation,
+)
 from oblidog_integrations.reporting import RunResult
 
 logger = structlog.get_logger(__name__)
@@ -53,8 +56,13 @@ def run() -> RunResult:
             receivables=receivables,
             on=now.date(),
         )
+        obligation_updated = sync_receivables_obligation(
+            oblidog=oblidog, receivables=receivables, on=now.date()
+        )
         result = RunResult(
-            changes_detected=created or bool(components_sync.changed_count)
+            changes_detected=created
+            or bool(components_sync.changed_count)
+            or obligation_updated
         )
         run.finish_success(changes_detected=result.changes_detected)
     logger.info(
