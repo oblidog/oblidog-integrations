@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import os
+import socket
+import ssl
 from collections.abc import Callable
 from dataclasses import dataclass
+from http.client import IncompleteRead, RemoteDisconnected
+from urllib.error import HTTPError, URLError
 
 import structlog
 
@@ -19,6 +23,31 @@ class RunResult:
 
 
 IntegrationRunner = Callable[[], RunResult]
+
+
+def _is_network_error(error: BaseException) -> bool:
+    """Recognize transport failures through provider exception wrappers."""
+    seen: set[int] = set()
+    while id(error) not in seen:
+        seen.add(id(error))
+        if isinstance(
+            error,
+            (
+                TimeoutError,
+                ConnectionError,
+                HTTPError,
+                URLError,
+                socket.gaierror,
+                ssl.SSLError,
+                IncompleteRead,
+                RemoteDisconnected,
+            ),
+        ):
+            return True
+        if error.__cause__ is None:
+            break
+        error = error.__cause__
+    return False
 
 
 def run_with_reporting(integration: str, runner: IntegrationRunner) -> RunResult:
@@ -37,7 +66,8 @@ def run_with_reporting(integration: str, runner: IntegrationRunner) -> RunResult
                 "integration_run_failed",
                 error_type=type(error).__name__,
                 error=str(error),
-                exc_info=os.getenv("OBLIDOG_LOG_TRACEBACKS", "0") == "1",
+                exc_info=os.getenv("OBLIDOG_LOG_TRACEBACKS", "0") == "1"
+                or not _is_network_error(error),
             )
             raise
         logger.info(

@@ -57,3 +57,41 @@ def test_reporter_controls_traceback_and_preserves_exception(monkeypatch, traceb
         error="provider timed out",
         exc_info=tracebacks == "1",
     )
+
+
+@pytest.mark.parametrize(
+    "cause",
+    [
+        TimeoutError("timeout"),
+        ConnectionResetError("reset"),
+    ],
+)
+def test_wrapped_network_errors_have_no_traceback(monkeypatch, cause):
+    from unittest.mock import Mock
+
+    from oblidog_integrations import reporting
+
+    monkeypatch.delenv("OBLIDOG_LOG_TRACEBACKS", raising=False)
+    logger = Mock()
+    monkeypatch.setattr(reporting, "logger", logger)
+    error = RuntimeError("provider request failed")
+    error.__cause__ = cause
+    with pytest.raises(RuntimeError):
+        reporting.run_with_reporting("nju", lambda: (_ for _ in ()).throw(error))
+    assert logger.error.call_args.kwargs["exc_info"] is False
+
+
+def test_invalid_payload_keeps_traceback_by_default(monkeypatch):
+    import json
+    from unittest.mock import Mock
+
+    from oblidog_integrations import reporting
+
+    monkeypatch.delenv("OBLIDOG_LOG_TRACEBACKS", raising=False)
+    logger = Mock()
+    monkeypatch.setattr(reporting, "logger", logger)
+    error = RuntimeError("invalid provider JSON")
+    error.__cause__ = json.JSONDecodeError("invalid", "bad", 0)
+    with pytest.raises(RuntimeError):
+        reporting.run_with_reporting("nju", lambda: (_ for _ in ()).throw(error))
+    assert logger.error.call_args.kwargs["exc_info"] is True

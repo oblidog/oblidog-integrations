@@ -343,6 +343,9 @@ and its category context is available; scheduler start only confirms the process
 was launched. Providers may authenticate before the Ledger run begins.
 
 Failures produce one `integration_run_failed` event with the error type and
-redacted message. Full tracebacks are opt-in with `OBLIDOG_LOG_TRACEBACKS=1`.
+redacted message. Typical network failures (including wrapped timeouts, HTTP
+errors and interrupted responses) omit tracebacks. Invalid payloads, parsing
+failures and code errors retain tracebacks by default. Set
+`OBLIDOG_LOG_TRACEBACKS=1` to include tracebacks for network failures as well.
 The scheduler still records the final exit status and duration, and nonzero exit
 codes are preserved. Locking and signal handling are unchanged.
