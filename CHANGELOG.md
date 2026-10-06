@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.4.5 (2026-10-06)
+
+### Fix
+
+- **iprzedszkole**: populate pending obligations from receivables (#36)
+
 ## v0.4.4 (2026-09-27)
 
 ### Fix
