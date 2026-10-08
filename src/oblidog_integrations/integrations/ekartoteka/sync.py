@@ -107,7 +107,10 @@ def run() -> RunResult:
         )
         known_change = (
             snapshot_export.created
-            or any(result.updated for result in obligation_data_syncs)
+            or any(
+                result.updated or result.marked_as_error
+                for result in obligation_data_syncs
+            )
             or obligation_check.marked_as_error
             or any(sync.changed_count for sync in components_syncs)
         )
@@ -144,6 +147,9 @@ def run() -> RunResult:
                 issue_date=obligation_data_sync.issue_date.isoformat(),
                 due_date=obligation_data_sync.due_date.isoformat(),
             )
+        elif obligation_data_sync.marked_as_error:
+            # The discrepancy was logged immediately when it was detected.
+            continue
         elif obligation_data_sync.fee_period_available:
             assert obligation_data_sync.lifecycle is not None
             logger.info(

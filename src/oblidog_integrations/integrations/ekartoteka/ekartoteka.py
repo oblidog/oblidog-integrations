@@ -6,6 +6,7 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
+import structlog
 from pydantic import BaseModel
 
 from oblidog_integrations.integrations.ekartoteka.api import (
@@ -23,6 +24,7 @@ MVP_ACCOUNT_SYMBOLS = ("204", "206", "210")
 MVP_UPDATE_CATEGORIES = ("DK", "DKL", "LI", "NRB", "NL")
 MONITORED_UPDATE_CATEGORIES = frozenset(MVP_UPDATE_CATEGORIES)
 EKARTOTEKA_TIMEZONE = ZoneInfo("Europe/Warsaw")
+logger = structlog.get_logger(__name__)
 
 
 class EkartotekaResult(BaseModel):
@@ -114,6 +116,9 @@ class Ekartoteka:
         Returns:
             Sum of ``DoZaplaty`` for the matching month in accounts 204, 206,
             and 210. Payments and running balances are deliberately excluded.
+            A missing month on interest account 210 contributes zero: this
+            ledger only publishes months with activity. Other accounts and
+            their target-month entries remain mandatory.
         """
         month_index = on.month - 1
         accounts = {
@@ -136,6 +141,15 @@ class Ekartoteka:
                 if entry.month == month_index
             ]
             if not matching_entries:
+                if symbol == "210":
+                    logger.info(
+                        "settlement_interest_month_absent",
+                        account_symbol=symbol,
+                        year=on.year,
+                        month=on.month,
+                        assumed_amount="0",
+                    )
+                    continue
                 raise IncompleteSettlementDataError(
                     f"Missing month {on.month} in settlement ledger for account {symbol}"
                 )

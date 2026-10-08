@@ -6,10 +6,12 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
+import structlog
 from oblidog_client import OblidogClient, ObligationLifecycle, ObligationPeriod
 
 from oblidog_integrations.integrations.ekartoteka.ekartoteka import Ekartoteka
 
+logger = structlog.get_logger(__name__)
 _LIFECYCLES_ALLOWED_WITHOUT_FEES = {
     ObligationLifecycle.DRAFT,
     ObligationLifecycle.COLLECTING_DATA,
@@ -37,6 +39,7 @@ class ObligationFeeDataSyncResult:
     current_amount: Decimal | None
     issue_date: date | None
     due_date: date | None
+    marked_as_error: bool = False
 
 
 def populate_obligation_when_fee_period_is_available(
@@ -50,6 +53,8 @@ def populate_obligation_when_fee_period_is_available(
     e-Kartoteka exposes the charge date as the fee period's ``starts_on`` date,
     but does not expose a payment due date.  The latter therefore defaults to
     the 15th day of the obligation month.
+    Ready/paid obligations retain their values, but a changed settlement amount
+    marks them as erroneous and appends a note for manual reconciliation.
 
     Args:
         ekartoteka: Authenticated provider facade used to fetch charges and
@@ -76,6 +81,39 @@ def populate_obligation_when_fee_period_is_available(
     period = ObligationPeriod(on.year, on.month)
     obligation = oblidog.obligations.get(period)
     if obligation.lifecycle not in _LIFECYCLES_ALLOWED_WITHOUT_FEES:
+        marked_as_error = False
+        if obligation.lifecycle in {
+            ObligationLifecycle.READY,
+            ObligationLifecycle.PAID,
+        }:
+            source_amount = ekartoteka.get_obligation_amount_from_settlements(on)
+            stored_amount = (
+                Decimal(str(obligation.current_amount))
+                if obligation.current_amount is not None
+                else None
+            )
+            if stored_amount != source_amount:
+                previous_amount = (
+                    f"{stored_amount:.2f}" if stored_amount is not None else "unknown"
+                )
+                note = (
+                    f"Settlement amount changed from {previous_amount} to "
+                    f"{source_amount:.2f} for {on.year}-{on.month:02d}; "
+                    "review the settlement. Stored amount and payment data were preserved."
+                )
+                # If marking error fails, a retry must not duplicate the note.
+                if note not in (obligation.notes or ""):
+                    oblidog.obligations.append_note(period, note)
+                oblidog.obligations.mark_error(period)
+                marked_as_error = True
+                logger.warning(
+                    "obligation_marked_error",
+                    obligation_key=obligation.key,
+                    reason="settlement_amount_changed",
+                    previous_amount=previous_amount,
+                    source_amount=str(source_amount),
+                    previous_lifecycle=obligation.lifecycle.value,
+                )
         return ObligationFeeDataSyncResult(
             fee_period_available=True,
             obligation_key=obligation.key,
@@ -84,6 +122,7 @@ def populate_obligation_when_fee_period_is_available(
             current_amount=None,
             issue_date=None,
             due_date=None,
+            marked_as_error=marked_as_error,
         )
 
     current_amount = ekartoteka.get_obligation_amount_from_settlements(on)
@@ -137,7 +176,10 @@ def mark_error_when_current_fee_period_is_missing(
 
     period = ObligationPeriod(on.year, on.month)
     obligation = oblidog.obligations.get(period)
-    if obligation.lifecycle in _LIFECYCLES_ALLOWED_WITHOUT_FEES:
+    if obligation.lifecycle not in {
+        ObligationLifecycle.READY,
+        ObligationLifecycle.PAID,
+    }:
         return ObligationFeePeriodCheck(
             fee_period_available=False,
             obligation_key=obligation.key,
