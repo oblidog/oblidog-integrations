@@ -25,9 +25,10 @@ Jeden run wykonuje kolejno:
    obligation.
 3. Uzupełnienie danych i przejście do `ready` dla tych samych dwóch
    obligation, o ile e-Kartoteka opublikowała naliczenie, a lifecycle jest
-   `draft` lub `collecting_data`.
+   `draft` lub `collecting_data`. Dla `ready` i `paid` sprawdzana jest zmiana
+   kwoty naliczeń; rozbieżność ustawia `error` i dopisuje notatkę.
 4. Kontrolę bieżącego obligation: gdy nie ma naliczenia, obligation w stanie
-   innym niż `draft` / `collecting_data` zostaje oznaczone jako `error`.
+   `ready` / `paid` zostaje oznaczone jako `error`.
 
 Klucz obligation ma format:
 
@@ -91,6 +92,16 @@ Przykład z `reverse/rozliczenia.txt`: wpis 204 dla `Mc = 7` ma
 
 Jeśli lifecycle nie jest `draft` ani `collecting_data`, dane nie są
 nadpisywane.
+
+Konta 204 i 206 muszą zawierać wpis dla miesiąca obligation. Brak miesiąca
+na istniejącym koncie 210 oznacza zero odsetek i jest odnotowywany w logu;
+brak całego konta nadal jest błędem niekompletnych danych.
+
+Dla `ready` i `paid` integracja porównuje zapisaną kwotę z aktualną sumą
+`DoZaplaty`. Zmiana ustawia `error` i dopisuje notatkę ze starą oraz nową
+kwotą. Dotychczasowa kwota i dane płatności pozostają zachowane. Obligacje
+`error` i `canceled` nie są ponownie oznaczane ani aktualizowane. Kontrola
+obejmuje poprzedni i bieżący miesiąc, tak jak pozostała synchronizacja.
 
 ## Snapshot category-data
 

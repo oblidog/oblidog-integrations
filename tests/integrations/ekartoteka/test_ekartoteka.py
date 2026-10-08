@@ -347,14 +347,50 @@ def test_obligation_amount_requires_every_settlement_account() -> None:
         client.get_obligation_amount_from_settlements(date(2026, 10, 3))
 
 
-def test_obligation_amount_requires_the_target_month_in_every_ledger() -> None:
+def test_obligation_amount_allows_missing_interest_month() -> None:
     class MissingMonthApi(FakeCompleteSnapshotApi):
         def get_annual_ledger(self, account_id: int) -> list[object]:
             return [] if account_id == 3 else super().get_annual_ledger(account_id)
 
     client = Ekartoteka(api=MissingMonthApi())  # type: ignore[arg-type]
 
-    with pytest.raises(IncompleteSettlementDataError, match="account 210"):
+    assert client.get_obligation_amount_from_settlements(date(2026, 10, 3)) == Decimal(
+        120
+    )
+
+
+def test_obligation_amount_includes_interest_when_published() -> None:
+    class InterestApi(FakeCompleteSnapshotApi):
+        def get_annual_ledger(self, account_id):
+            entries = super().get_annual_ledger(account_id)
+            if account_id == 3:
+                return [
+                    entry.model_copy(update={"amount_due": Decimal("1.82")})
+                    for entry in entries
+                ]
+            return entries
+
+    client = Ekartoteka(api=InterestApi())  # type: ignore[arg-type]
+    assert client.get_obligation_amount_from_settlements(date(2026, 10, 3)) == Decimal(
+        "121.82"
+    )
+
+
+@pytest.mark.parametrize("account_id,symbol", [(1, "204"), (2, "206")])
+def test_obligation_amount_requires_the_target_month_in_charge_ledgers(
+    account_id: int,
+    symbol: str,
+) -> None:
+    class MissingMonthApi(FakeCompleteSnapshotApi):
+        def get_annual_ledger(self, requested_id: int) -> list[object]:
+            return (
+                []
+                if requested_id == account_id
+                else super().get_annual_ledger(requested_id)
+            )
+
+    client = Ekartoteka(api=MissingMonthApi())  # type: ignore[arg-type]
+    with pytest.raises(IncompleteSettlementDataError, match=f"account {symbol}"):
         client.get_obligation_amount_from_settlements(date(2026, 10, 3))
 
 
@@ -718,12 +754,17 @@ def test_published_fees_populate_and_ready_draft_or_collecting_obligation() -> N
         assert marked_ready == [ObligationPeriod(2026, 10)]
 
 
-def test_published_fees_do_not_overwrite_ready_obligation() -> None:
+@pytest.mark.parametrize(
+    "lifecycle", [ObligationLifecycle.READY, ObligationLifecycle.PAID]
+)
+def test_published_fees_do_not_overwrite_unchanged_obligation(lifecycle) -> None:
     updates: list[dict[str, object]] = []
     marked_ready: list[ObligationPeriod] = []
     obligations = SimpleNamespace(
         get=lambda _period: SimpleNamespace(
-            key="FLAT-2026-10", lifecycle=ObligationLifecycle.READY
+            key="FLAT-2026-10",
+            lifecycle=lifecycle,
+            current_amount=120.0,
         ),
         update=lambda key, **kwargs: updates.append({"obligation_key": key, **kwargs}),
         mark_ready=marked_ready.append,
@@ -738,9 +779,87 @@ def test_published_fees_do_not_overwrite_ready_obligation() -> None:
 
     assert result.fee_period_available
     assert not result.updated
-    assert result.lifecycle is ObligationLifecycle.READY
+    assert result.lifecycle is lifecycle
+    assert not result.marked_as_error
     assert not updates
     assert not marked_ready
+
+
+@pytest.mark.parametrize(
+    "lifecycle", [ObligationLifecycle.READY, ObligationLifecycle.PAID]
+)
+def test_changed_settlement_marks_error_without_overwriting_values(lifecycle) -> None:
+    obligation = SimpleNamespace(
+        key="FLAT-2026-10",
+        lifecycle=lifecycle,
+        current_amount=Decimal("118.18"),
+        notes=None,
+        paid_at="2026-10-05T12:00:00Z",
+    )
+    notes = []
+    errors = []
+
+    def append_note(period, text):
+        notes.append((period, text))
+        obligation.notes = text
+
+    def mark_error(period):
+        errors.append(period)
+        obligation.lifecycle = ObligationLifecycle.ERROR
+
+    client = SimpleNamespace(
+        obligations=SimpleNamespace(
+            get=lambda _period: obligation,
+            append_note=append_note,
+            mark_error=mark_error,
+        )
+    )
+    provider = Ekartoteka(api=FakeComponentsApi())  # type: ignore[arg-type]
+    result = populate_obligation_when_fee_period_is_available(
+        ekartoteka=provider,
+        oblidog=client,
+        on=date(2026, 10, 3),
+    )
+
+    assert result.marked_as_error
+    assert not result.updated
+    assert errors == [ObligationPeriod(2026, 10)]
+    assert len(notes) == 1
+    assert "118.18 to 120.00" in notes[0][1]
+    assert obligation.current_amount == Decimal("118.18")
+    assert obligation.paid_at == "2026-10-05T12:00:00Z"
+
+    repeated = populate_obligation_when_fee_period_is_available(
+        ekartoteka=provider,
+        oblidog=client,
+        on=date(2026, 10, 3),
+    )
+    assert not repeated.marked_as_error
+    assert len(errors) == len(notes) == 1
+
+
+@pytest.mark.parametrize(
+    "lifecycle", [ObligationLifecycle.ERROR, ObligationLifecycle.CANCELED]
+)
+def test_error_and_canceled_obligations_skip_settlement_check(lifecycle) -> None:
+    class UnavailableLedgerApi(FakeComponentsApi):
+        def get_annual_ledger(self, account_id):
+            raise AssertionError("Settlements must not be fetched")
+
+    client = SimpleNamespace(
+        obligations=SimpleNamespace(
+            get=lambda _period: SimpleNamespace(
+                key="FLAT-2026-10", lifecycle=lifecycle
+            ),
+        )
+    )
+    result = populate_obligation_when_fee_period_is_available(
+        ekartoteka=Ekartoteka(api=UnavailableLedgerApi()),  # type: ignore[arg-type]
+        oblidog=client,
+        on=date(2026, 10, 3),
+    )
+    assert not result.updated
+    assert not result.marked_as_error
 
 
 def test_snapshot_identical_to_latest_category_data_is_not_exported() -> None:
@@ -824,12 +943,21 @@ def test_missing_fee_period_marks_non_collecting_obligation_as_error() -> None:
     assert marked_as_error == [ObligationPeriod(2026, 9)]
 
 
-def test_missing_fee_period_keeps_collecting_obligation_unchanged() -> None:
+@pytest.mark.parametrize(
+    "lifecycle",
+    [
+        ObligationLifecycle.DRAFT,
+        ObligationLifecycle.COLLECTING_DATA,
+        ObligationLifecycle.ERROR,
+        ObligationLifecycle.CANCELED,
+    ],
+)
+def test_missing_fee_period_keeps_inactive_obligation_unchanged(lifecycle) -> None:
     marked_as_error: list[ObligationPeriod] = []
     obligations = SimpleNamespace(
         get=lambda _period: SimpleNamespace(
             key="FLAT-2026-09",
-            lifecycle=ObligationLifecycle.COLLECTING_DATA,
+            lifecycle=lifecycle,
         ),
         mark_error=marked_as_error.append,
     )
@@ -844,5 +972,5 @@ def test_missing_fee_period_keeps_collecting_obligation_unchanged() -> None:
 
     assert not result.marked_as_error
     assert not result.fee_period_available
-    assert result.lifecycle is ObligationLifecycle.COLLECTING_DATA
+    assert result.lifecycle is lifecycle
     assert not marked_as_error
