@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.4.6 (2026-10-08)
+
+### Fix
+
+- handle sparse interest ledgers and flag changed settlement amounts (#47)
+
 ## v0.4.5 (2026-10-06)
 
 ### Fix
