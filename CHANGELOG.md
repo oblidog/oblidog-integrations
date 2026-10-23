@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.4.7 (2026-10-23)
+
+### Fix
+
+- **deps**: bump certifi from 2026.7.22 to 2026.10.19 (#52)
+
 ## v0.4.6 (2026-10-08)
 
 ### Fix
