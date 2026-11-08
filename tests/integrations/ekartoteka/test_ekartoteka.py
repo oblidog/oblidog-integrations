@@ -427,6 +427,65 @@ def test_incomplete_settlements_do_not_update_or_ready_an_obligation() -> None:
     assert not marked_ready
 
 
+@pytest.mark.parametrize(
+    "lifecycle", [ObligationLifecycle.DRAFT, ObligationLifecycle.COLLECTING_DATA]
+)
+def test_november_settlements_ready_obligation_without_fee_period(lifecycle) -> None:
+    class NovemberApi(FakeCompleteSnapshotApi):
+        def get_premises(self) -> PremisesPage:
+            return FakeComponentsApi().get_premises()
+
+        def get_fee_periods(self, premises_id: int) -> FeePeriodsPage:
+            return FakeComponentsApi().get_fee_periods(premises_id)
+
+        def get_annual_ledger(self, account_id: int) -> list[object]:
+            if account_id == 3:
+                return []  # No interest entry for November.
+            amount = "570.86" if account_id == 1 else "44.88"
+            return [
+                AnnualLedgerEntry.model_validate(
+                    {
+                        "DoZaplaty": amount,
+                        "Zaplacono": 0,
+                        "Mc": 10,
+                        "Nadplata": 0,
+                        "Zaleglosc": 0,
+                        "islimitMonths": 0,
+                        "s": 0,
+                    }
+                )
+            ]
+
+    updates: list[dict[str, object]] = []
+    ready: list[ObligationPeriod] = []
+    oblidog = SimpleNamespace(
+        obligations=SimpleNamespace(
+            get=lambda period: SimpleNamespace(key=str(period), lifecycle=lifecycle),
+            update=lambda period, **kw: updates.append({"period": period, **kw}),
+            mark_ready=ready.append,
+        )
+    )
+    result = populate_obligation_when_fee_period_is_available(
+        ekartoteka=Ekartoteka(api=NovemberApi()),  # type: ignore[arg-type]
+        oblidog=oblidog,
+        on=date(2026, 11, 6),
+    )
+    assert result.updated
+    assert not result.fee_period_available
+    assert result.current_amount == Decimal("615.74")
+    assert result.issue_date == date(2026, 11, 1)
+    assert result.due_date == date(2026, 11, 15)
+    assert updates == [
+        {
+            "period": ObligationPeriod(2026, 11),
+            "current_amount": "615.74",
+            "issue_date": date(2026, 11, 1),
+            "due_date": date(2026, 11, 15),
+        }
+    ]
+    assert ready == [ObligationPeriod(2026, 11)]
+
+
 def test_fee_models_parse_dates_and_monetary_items() -> None:
     periods = FeePeriodsPage.model_validate(
         {
@@ -627,11 +686,22 @@ def test_run_exports_the_snapshot_as_category_data(monkeypatch) -> None:
             }
             return []
 
+        def get_obligation_amount_from_settlements(self, on: date) -> Decimal:
+            return Decimal("615.74")
+
     class FakeOblidogClient:
         def __init__(self, *, base_url: str, api_key: str) -> None:
             captured["base_url"] = base_url
             captured["api_key"] = api_key
             self.category_data = self
+            self.obligations = SimpleNamespace(
+                get=lambda period: SimpleNamespace(
+                    key=str(period),
+                    lifecycle=ObligationLifecycle.DRAFT,
+                ),
+                update=lambda *args, **kwargs: None,
+                mark_ready=lambda period: None,
+            )
             self.integrations = _fake_integrations()
 
         def __enter__(self) -> Self:
