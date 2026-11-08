@@ -50,9 +50,9 @@ def populate_obligation_when_fee_period_is_available(
 ) -> ObligationFeeDataSyncResult:
     """Fill a draft/collecting obligation when e-Kartoteka publishes charges.
 
-    e-Kartoteka exposes the charge date as the fee period's ``starts_on`` date,
-    but does not expose a payment due date.  The latter therefore defaults to
-    the 15th day of the obligation month.
+    When fee-period details are available, their start date is used as the
+    issue date. Otherwise the first day of the obligation month is a fallback.
+    The payment due date defaults to the 15th day of that month.
     Ready/paid obligations retain their values, but a changed settlement amount
     marks them as erroneous and appends a note for manual reconciliation.
 
@@ -67,17 +67,7 @@ def populate_obligation_when_fee_period_is_available(
         written and marked ready.
     """
     components = ekartoteka.get_current_fee_components(on)
-    if not components:
-        return ObligationFeeDataSyncResult(
-            fee_period_available=False,
-            obligation_key=None,
-            lifecycle=None,
-            updated=False,
-            current_amount=None,
-            issue_date=None,
-            due_date=None,
-        )
-
+    fee_period_available = bool(components)
     period = ObligationPeriod(on.year, on.month)
     obligation = oblidog.obligations.get(period)
     if obligation.lifecycle not in _LIFECYCLES_ALLOWED_WITHOUT_FEES:
@@ -115,7 +105,7 @@ def populate_obligation_when_fee_period_is_available(
                     previous_lifecycle=obligation.lifecycle.value,
                 )
         return ObligationFeeDataSyncResult(
-            fee_period_available=True,
+            fee_period_available=fee_period_available,
             obligation_key=obligation.key,
             lifecycle=obligation.lifecycle,
             updated=False,
@@ -126,7 +116,10 @@ def populate_obligation_when_fee_period_is_available(
         )
 
     current_amount = ekartoteka.get_obligation_amount_from_settlements(on)
-    issue_date = components[0].period.starts_on
+    # When fee details lag behind the settlement ledger, use the first day of
+    # the obligation month as a deterministic fallback, not an invented
+    # provider publication date.
+    issue_date = components[0].period.starts_on if components else on.replace(day=1)
     due_date = date(on.year, on.month, 15)
     oblidog.obligations.update(
         period,
@@ -136,7 +129,7 @@ def populate_obligation_when_fee_period_is_available(
     )
     oblidog.obligations.mark_ready(period)
     return ObligationFeeDataSyncResult(
-        fee_period_available=True,
+        fee_period_available=fee_period_available,
         obligation_key=obligation.key,
         lifecycle=obligation.lifecycle,
         updated=True,
