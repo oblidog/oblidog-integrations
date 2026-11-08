@@ -14,7 +14,6 @@ from oblidog_integrations.integrations.ekartoteka.components import (
 )
 from oblidog_integrations.integrations.ekartoteka.ekartoteka import Ekartoteka
 from oblidog_integrations.integrations.ekartoteka.obligations import (
-    mark_error_when_current_fee_period_is_missing,
     populate_obligation_when_fee_period_is_available,
 )
 from oblidog_integrations.reporting import RunResult
@@ -47,8 +46,8 @@ def run() -> RunResult:
 
     Reads required credentials and target configuration from the environment.
     The run exports the annual category-data snapshot, refreshes fee components
-    and obligation data for the previous and current months, then applies the
-    missing-fee lifecycle check to the current month.
+    and obligation data for the previous and current months. Monthly settlement
+    entries can populate obligations even when fee-period details are absent.
 
     Raises:
         RuntimeError: If required environment configuration is absent.
@@ -100,18 +99,12 @@ def run() -> RunResult:
             )
             for period in billing_periods
         ]
-        obligation_check = mark_error_when_current_fee_period_is_missing(
-            ekartoteka=ekartoteka_client,
-            oblidog=client,
-            on=now.date(),
-        )
         known_change = (
             snapshot_export.created
             or any(
                 result.updated or result.marked_as_error
                 for result in obligation_data_syncs
             )
-            or obligation_check.marked_as_error
             or any(sync.changed_count for sync in components_syncs)
         )
         result = RunResult(changes_detected=known_change)
@@ -146,6 +139,7 @@ def run() -> RunResult:
                 current_amount=str(obligation_data_sync.current_amount),
                 issue_date=obligation_data_sync.issue_date.isoformat(),
                 due_date=obligation_data_sync.due_date.isoformat(),
+                fee_period_available=obligation_data_sync.fee_period_available,
             )
         elif obligation_data_sync.marked_as_error:
             # The discrepancy was logged immediately when it was detected.
@@ -163,20 +157,10 @@ def run() -> RunResult:
                 "obligation_data_not_updated",
                 reason="fee_period_unavailable",
             )
-    if obligation_check.fee_period_available:
-        logger.info("fee_period_available", year=now.year, month=now.month)
-    elif obligation_check.marked_as_error:
-        logger.warning(
-            "obligation_marked_error",
-            obligation_key=obligation_check.obligation_key,
-            reason="fee_period_unavailable",
-        )
-    else:
-        assert obligation_check.lifecycle is not None
+    if not obligation_data_syncs[-1].fee_period_available:
         logger.info(
-            "obligation_error_not_marked",
-            obligation_key=obligation_check.obligation_key,
-            lifecycle=obligation_check.lifecycle.value,
+            "fee_period_details_unavailable",
+            obligation_period=str(obligation_data_syncs[-1].obligation_key),
             reason="fee_period_unavailable",
         )
     return result
