@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.4.8 (2026-11-08)
+
+### Fix
+
+- sync e-Kartoteka obligations without fee-period details (#58)
+
 ## v0.4.7 (2026-10-23)
 
 ### Fix
